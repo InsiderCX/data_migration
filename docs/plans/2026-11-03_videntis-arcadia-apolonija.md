@@ -11,8 +11,29 @@ Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 | 1 Discovery | done; account cards written; checklist `out/DEV-162_checks.xlsx` (git-ignored) |
 | 2 Load files | done; hashes in the account cards |
 | 3 SQL + mock tests | load path (01, 02, 03, 04, 99) done, mock test passes for all three; ops SQL (05–08) still to write |
-| 4 Staging | **loaded and validated 3 Nov 2026** for all three (run logs in `accounts/<account>/runs/`); rollback tested; loads left on staging for ops. Open: rollback takes 35 min on Apolonija; ops SQL 05–08 |
+| 4 Staging | **loaded 3 Nov 2026** for all three (run logs in `accounts/<account>/runs/`); rollback tested; loads left on staging for ops. **Compared with Zoho (old BI): every difference explained** (run logs, section "Comparison with Zoho Analytics") |
+| 5 Ops validation (DEV-184) | material ready, not yet sent to ops. DEV-184 is done only when ops have validated the data |
 | 5–7 | not started |
+
+## Where we stopped (3 Nov 2026, end of day)
+
+Branch `feat/DEV-184-validate-legacy-data-staging` (pushed, no PR yet). DEV-162 work is merged (PRs #2, #3).
+
+**Done:** discovery, load files, generated SQL (01, 02, 03, 04, 99) with passing mock tests, staging load of all three Accounts, comparison with Zoho, export of the still-unlinked responses.
+
+**Open, in order:**
+1. **Ana:** rotate the EU staging password (it appeared in Claude's output on 3 Nov), then update `STG_DATABASE_URL` in `.env`.
+2. **Ana:** send ops the material: the three staging run logs, `out/DEV-184_unlinked_responses_staging_2026-11-03.xlsx`, `out/DEV-162_checks.xlsx`. Ops validate outside the session; their written sign-off closes DEV-184.
+3. **Claude, if ops want their usual workbook:** ops SQL 05–08 for the new Accounts (template in `tools/render_legacy_sql.py`), mock-tested, then run read-only on staging.
+4. **Claude, before production (DEV-162):** make `99_rollback.sql` faster (Apolonija took 35 min on staging), re-test on staging; write each Account's `PRODUCTION.md`.
+5. **Ana / clinic:** open checks C03 (Arcadia's 93 responses on reused ids), C04 (Videntis' 69 responses whose invite is missing), C05 / C06 (Apolonija's rows without id and `#N/A` ids).
+6. After ops sign-off: drop the staging tables with patient data (`stg_videntis_full`, `stg_arcadia_full`, `stg_apolonija_full`, and SIE's old `stg_sie_full`).
+
+**Where things are:**
+- Local, git-ignored: patient files and load files in `accounts/<account>/data/`; the checklist and exports in `out/`; comparison data in `out/dev162/`.
+- Rebuild the checklist: `.venv/bin/python -I tools/dev162/build_checks_workbook.py "$PWD" out/dev162/unlinked.tsv out/DEV-162_checks.xlsx`.
+- Staging runs: `bash tools/run_staging.sh <account> <clinic csv>` (refuses anything but `insider-eu-stg`). Production is never run by Claude without Ana's explicit permission.
+- Zoho through Zamera blocks the token after a burst of calls ("Access Denied"); wait and retry, keep calls few.
 
 ## How we work
 

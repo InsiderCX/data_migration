@@ -3,6 +3,7 @@ accounts/*/data/*
 !accounts/*/data/.gitkeep
 accounts/*/out/*
 !accounts/*/out/.gitkeep
+/out/
 *.xlsx
 *.xls
 *.pkl
