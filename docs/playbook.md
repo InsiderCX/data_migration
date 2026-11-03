@@ -21,7 +21,9 @@ From "the clinic has old data in another system" to "Clinicdash shows it and ops
 
 Write all of this into `accounts/<account>/README.md` (the account card) before building anything.
 
-## 2. Decide what is real and what must be estimated
+## 2. Prepare the data: what is real and what must be estimated
+
+The load file holds everything from the clinic's file that **doesn't exist in the database yet**. Rows already on the platform are only linked, never created again. Where the clinic's file is missing values that dashboards need (dates, which visits got an invite, delivery), fill them with **estimates fitted to the Account's real platform data**. That way the legacy period's response rate, delivery rate and timing look like what the platform actually produces. Every estimated value is marked as estimated.
 
 Typical for legacy data: responses (real), patients (real), doctor and comments (real); **missing**: visit dates, send dates, which visits got an invite, delivery status. Estimate only what dashboards need, and agree with Ana / ops that the estimates are acceptable and will be labelled. If the clinic or the old SMS provider can supply real send counts, prefer those.
 
@@ -40,6 +42,7 @@ Copy `accounts/sie/` to `accounts/<account>/` and change:
 - the hard-coded expected counts in `02_load.sql` (row kinds, responses to link, params) and the expectations in `03`, `06`, `07`, `08`
 - `06_compare_bi_responses.sql`: regenerate its inlined BI responses from the Account's BI export
 - the account card and `PRODUCTION.md`
+- start an empty `runs/` folder (don't copy SIE's logs)
 
 Build the load file with `scripts/1_*` and `scripts/2_*`, record its SHA-256, and keep it in `data/` (git-ignored).
 
@@ -65,9 +68,29 @@ Hand ops the material in `ops-validation.md`: the visual report, the workbook, t
 
 Follow `accounts/<account>/PRODUCTION.md`: go/no-go list (ops, CTO, dev check on `legacy_import` batches, backup, file hashes), then 01 → import → 02 → 03 → 04 → 06 → 07/08, Clinicdash check, drop staging tables, delete local PII. On prod every comparison with BI must match exactly.
 
+The short version (SIE, 28 Oct 2026, is the worked example in `accounts/sie/runs/`):
+
+| # | Who | Do | Check |
+|---|---|---|---|
+| — | Claude | Pre-flight on the prod replica: right Account, unlinked responses, no leftovers, original trigger, baseline counts | Matches the account card |
+| 1 | Person | `SELECT current_database(), …` | Right database and Account (EU vs UK) |
+| 2 | Person | `01_before_import.sql` | 3 tables + staging table, 0 rows |
+| 3 | Person | GUI import of the load file into the existing staging table | — |
+| 4 | Person | Count check | Row kinds as in the account card |
+| 5 | Person | Check the GUI's **commit mode**, then `02_load.sql`. Wait for the result row | Counts as in the account card |
+| 6 | Claude | Confirm the load on the replica, then run `03` and `06` read-only | All checks pass; BI matches every month |
+| 7 | Person | `04_export_original_csv.sql` and compare with the clinic file | Identical (may be skipped by decision if proven on staging; write that down) |
+| 8 | Person | Clinicdash on prod | Legacy period visible; platform period unchanged |
+| 9 | Person | `DROP TABLE` the staging table; delete local PII | Claude confirms on the replica that the table is gone |
+
+Hashes: if a file's hash differs from the recorded one, compare the values before rejecting it. A lost final newline is enough to change the hash.
+
+**Write a run log** in `accounts/<account>/runs/<date>_<environment>.md`: pre-flight, each step with its result, ids created (load code, mock sending batch id, `loaded_at`), what was skipped and why, open items, lessons. Copy the SIE log's layout.
+
 ## 8. Aftercare
 
 - Tell the clinic and the CSM which figures are estimates.
 - Retire the old BI pages for the Account once ops agree.
-- Update the status table in the root `README.md` and the account card (dates, counts, hashes).
+- Update the status table in the root `README.md` and the account card (dates, counts, hashes), and link the run log.
+- Move new lessons from the run log into `pitfalls.md` and this playbook.
 - Restrict `legacy_source_row` access like `patient`.

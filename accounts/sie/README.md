@@ -9,7 +9,7 @@ Written as a runbook for Claude Code (or a person) who needs to redo, check or u
 | Load code | `SIE_LEGACY_V4` |
 | Account / Location / Survey | 36 / 57 / 17 on EU prod. Scripts resolve them from Alchemer survey **90558103**, so other environments can use other ids |
 | Owner | Ana (ana@insidercx.com) |
-| Status | Validated on EU stg, 23 Oct 2026. Prod pending confirmation |
+| Status | Validated on EU stg 23–26 Oct 2026; ops confirmed. **Loaded on EU prod 28 Oct 2026** (mock sending batch 13128). Run log: [`runs/2026-10-28_production.md`](runs/2026-10-28_production.md) |
 
 ---
 

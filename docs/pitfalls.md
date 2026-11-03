@@ -19,3 +19,5 @@
 | `NaN` treated as a value in Python | pandas NaN is truthy | Normalise missing values to `''` before logic |
 | Silent change of raw values | GUI converting dates or numbers | `02` refuses if `raw_visit_date` / `raw_phone` look converted |
 | Same file with a new name | `Joined.csv` = `Sie_surveys.csv` | Compare hashes of every input |
+| Replica showed nothing right after `02_load.sql` (SIE prod, 28 Oct 2026) | The run hadn't finished or wasn't committed yet in the GUI | Before running `02`, check the GUI's commit mode. Wait for the result row, then confirm on the replica before the next step |
+| Load file hash differed from the recorded one (SIE prod) | The final newline was lost on upload / download | If a hash differs, compare the values (pandas) before rejecting the file. Record what differed in the run log |

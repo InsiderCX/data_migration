@@ -24,6 +24,7 @@ accounts/
                           05 ops field exports, 06 BI comparison, 07 report by period, 08 ops lists, 99 rollback
     scripts/              build the load file (1, 2) and the ops workbook (3)
     tests/                local PostgreSQL mock with the real constraints
+    runs/                 one log per staging / production run: what was run, results, open items
     data/                 inputs and load file - CONTAINS PATIENT DATA, never committed
     out/                  exports and workbooks - never committed
 ```
@@ -32,7 +33,7 @@ accounts/
 
 | Account | Region | Load code | Staging | Ops | Production |
 |---|---|---|---|---|---|
-| Stomatologija i estetika (`sie`) | EU | `SIE_LEGACY_V4` | validated 23–26 Oct 2026 | confirmed | pending |
+| Stomatologija i estetika (`sie`) | EU | `SIE_LEGACY_V4` | validated 23–26 Oct 2026 | confirmed | **loaded 28 Oct 2026** (batch 13128); follow-ups open, see `accounts/sie/runs/2026-10-28_production.md` |
 
 ## Ground rules (short version; full list in `CLAUDE.md`)
 
