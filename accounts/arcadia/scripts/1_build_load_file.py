@@ -1,0 +1,208 @@
+"""
+Build the load file for one Account's legacy import: every row of the clinic file, with what the load needs.
+
+Usage: python3 -I 1_build_load_file.py <clinic csv> <db unlinked responses csv> <out load csv>
+
+  clinic csv     : Pacijenti_JOINED_<Account>.csv from ops (rows with visit_date = platform, already in the DB)
+  db responses   : data/db_unlinked_responses_<date>.csv, exported from the prod replica
+                   (alchemer_response_id, sguid exactly as stored, started_utc, status, is_test)
+  out            : data/<account>_full_v1.csv, imported into stg_<account>_full by the GUI
+
+Only the CONFIG block differs between Accounts; the code below it is identical (diff it to check).
+
+Method (SIE's, re-fitted per Account; every est_* value is ESTIMATED):
+  1. Anchors: legacy rows whose id is the sguid of an unlinked DB response (sguid trimmed, test links excluded).
+     Ids used by two clinic rows (reused) are never anchors and never linked.
+  2. Send date: within each id scheme, legacy ids are time-ordered. Schemes with Spearman < 0.95 (check C10)
+     instead get the anchors' send-time quantiles by id rank. Isotonic fit id sequence ->
+     (response start - send->response median), interpolated between isotonic block midpoints. Day = predicted day
+     (weekend -> Monday: legacy sends were on weekdays), time = SEND_TIME (Zagreb).
+     Anchors: sent_at = min(estimate, response start - 2 min).
+  3. Visit date = sent_at - visit->send median, stored as Zagreb wall-clock labelled +00 (platform convention).
+  4. Invites: replay platform rules per phone - first visit, then none within QUARANTINE_DAYS, age rule if
+     AGE_RULE; anchors always invited; rows without a phone only if they are anchors.
+  5. Status: anchors DELIVERED; others DELIVERED except a deterministic share (md5(id) mod 1000 < UNDELIVERED_PER_MILLE).
+  6. Year of birth per YOB_RULE.
+Linked responses: anchors that are not Deleted (decision 12). link_sguid is the sguid exactly as Alchemer stores it.
+"""
+# ---------------------------------------------------------------- CONFIG (Arcadia, EU Account 45)
+CONFIG = dict(
+    account="arcadia",
+    send_time=(15, 0),                 # legacy SMS batch time, Zagreb (from response starts; estimated)
+    send_to_response_h=1.05,           # platform median, Apr 2025 - Nov 2026
+    visit_to_send_h=26.2,              # platform median
+    quarantine_days=90,
+    age_rule=18,                       # Location age limit 18 (replay recall 89.4 % with it)
+    undelivered_per_mille=118,         # platform delivery 88.2 %
+    yob_rule="file",                   # legacy rows have a real year_of_birth
+    raw_only_ids=(),                   # ids stored as source rows only (no visit, no invite)
+)
+# ---------------------------------------------------------------- code (identical for every Account)
+import hashlib
+import re
+import sys
+
+import numpy as np
+import pandas as pd
+from sklearn.isotonic import IsotonicRegression
+
+CLINIC, RESP, OUT = sys.argv[1:4]
+TZ = "Europe/Zagreb"
+E = pd.Timestamp("1970-01-01", tz="UTC")
+TEST = re.compile(r"test|^t+1?t*s+|^1111\d{8,}$|^111222666$|^40275999993$", re.I)  # test links seen on prod
+UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+raw = pd.read_csv(CLINIC, dtype=str, encoding="utf-8-sig", keep_default_na=False)
+RAW_COLS = list(raw.columns)
+d = raw.copy()
+d.insert(0, "row_no", range(1, len(d) + 1))
+d["cid"] = d["id"].str.strip()
+
+# row kinds before invite selection
+platform = d.visit_date.str.strip() != ""
+assert d.loc[platform, "cid"].str.match(UUID).all(), "platform row without a uuid id"
+raw_only = ~platform & ((d.cid == "") | d.cid.isin(CONFIG["raw_only_ids"]))
+legacy = ~platform & ~raw_only
+counts = d.loc[legacy, "cid"].value_counts()
+reused = legacy & d.cid.map(counts).gt(1)
+
+
+def scheme(i):
+    """(scheme key, sequence) of a legacy id: text prefix, else the first two digits."""
+    m = re.fullmatch(r"([a-z]+)(\d+)", i, re.I)
+    if m:
+        return m.group(1).lower(), int(m.group(2))
+    if i.isdigit() and len(i) > 2:
+        return i[:2], int(i[2:])
+    return "other", int(i) if i.isdigit() else 0
+
+
+leg = d[legacy].copy()
+leg[["scheme", "seq"]] = pd.DataFrame([scheme(i) for i in leg.cid], index=leg.index)
+
+# responses: trimmed sguid -> clinic id
+r = pd.read_csv(RESP, dtype=str, keep_default_na=False)
+r["key"] = r.sguid.str.strip()
+r = r[(r.is_test != "True") & ~r.key.str.contains(TEST)]
+r["start"] = pd.to_datetime(r.started_utc).dt.tz_localize("UTC")
+unique_ids = set(leg.loc[~reused[legacy], "cid"])
+anc = r[r.key.isin(unique_ids)].sort_values("start").drop_duplicates("key")
+anc = anc.rename(columns={"sguid": "resp_sguid", "status": "resp_status", "start": "resp_start"})
+leg = leg.merge(anc[["key", "resp_sguid", "resp_start", "resp_status"]], how="left", left_on="cid", right_on="key")
+leg.index = d.index[legacy]
+leg["anchor"] = leg.resp_start.notna()
+
+# 2. send date per id scheme
+leg["sent"] = pd.Series(pd.NaT, index=leg.index, dtype="datetime64[ns, UTC]")
+for k, g in leg.groupby("scheme"):
+    a = g[g.anchor]
+    y = ((a.resp_start - pd.Timedelta(hours=CONFIG["send_to_response_h"])) - E).dt.total_seconds() if len(a) else None
+    rho = a.seq.corr(y, method="spearman") if len(a) >= 3 else float("nan")
+    if len(a) >= 3 and not rho >= 0.95:
+        # weakly ordered scheme (check C10): ids -> anchor send-time quantiles by rank, so the scheme keeps the
+        # anchors' period and density without stacking on one day
+        pred = np.quantile(y.values, (g.seq.rank(method="first").values - 0.5) / len(g))
+        print(f"scheme {k}: {len(g)} rows, {len(a)} anchors, spearman {rho:.3f} -> rank quantiles", file=sys.stderr)
+    elif len(a) >= 2:
+        ir = IsotonicRegression(out_of_bounds="clip").fit(a.seq, y)
+        # isotonic pools out-of-order anchors into flat blocks; interpolate between block midpoints so ids inside
+        # and between blocks are spread over the gap instead of stacked on one day
+        xs = np.array(sorted(set(a.seq)), dtype=float); fit = ir.predict(xs)
+        blocks = pd.DataFrame({"x": xs, "y": fit}).groupby("y", sort=True).x.mean()
+        pred = np.interp(g.seq, blocks.values, blocks.index.values)
+    else:  # scheme without anchors: place it at the median of all anchors (reported)
+        pred = [((leg[leg.anchor].resp_start.median() - E).total_seconds())] * len(g)
+        print(f"scheme {k}: {len(g)} rows, {len(a)} anchors -> median date", file=sys.stderr)
+    est = pd.Series(E + pd.to_timedelta(pred, unit="s"), index=g.index).dt.tz_convert(TZ)
+    h, m = CONFIG["send_time"]
+    day = est.dt.normalize()
+    day = day + pd.to_timedelta((7 - day.dt.dayofweek).where(day.dt.dayofweek >= 5, 0), unit="D")  # weekend -> Monday
+    leg.loc[g.index, "sent"] = (day + pd.Timedelta(hours=h, minutes=m)).dt.tz_convert("UTC")
+leg["sent"] = pd.to_datetime(leg.sent, utc=True)
+cap = leg.resp_start - pd.Timedelta(minutes=2)
+over = leg.anchor & (leg.sent > cap)
+leg.loc[over, "sent"] = cap[over]
+
+# 3. visit date
+leg["visit_utc"] = leg.sent - pd.Timedelta(hours=CONFIG["visit_to_send_h"])
+visit_local = leg.visit_utc.dt.tz_convert(TZ)
+
+# 6. year of birth
+if CONFIG["yob_rule"] == "2026_minus_age":
+    age = pd.to_numeric(leg.age, errors="coerce")
+    leg["yob_out"] = (2026 - age).astype("Int64").astype(str).replace("<NA>", "")
+    age_at_visit = visit_local.dt.year - (2026 - age)
+elif CONFIG["yob_rule"] == "file":
+    leg["yob_out"] = leg.year_of_birth.str.strip()
+    age_at_visit = visit_local.dt.year - pd.to_numeric(leg.year_of_birth, errors="coerce")
+else:  # "none"
+    leg["yob_out"] = ""
+    age_at_visit = pd.Series(float("nan"), index=leg.index)
+
+# 4. invite selection
+leg["phone_clean"] = leg.phone.str.replace(r"\D", "", regex=True)
+leg.loc[leg.phone_clean.str.len() < 8, "phone_clean"] = ""
+ok_age = pd.Series(True, index=leg.index)
+if CONFIG["age_rule"] is not None:
+    ok_age = age_at_visit.isna() | (age_at_visit >= CONFIG["age_rule"])
+invited, last = pd.Series(False, index=leg.index), {}
+for i in leg.sort_values(["visit_utc", "seq"]).index:
+    ph, t = leg.at[i, "phone_clean"], leg.at[i, "visit_utc"]
+    if not ph:  # no phone, no SMS: invited only when a real response proves it
+        invited[i] = bool(leg.at[i, "anchor"])
+        continue
+    prev = last.get(ph)
+    ok = leg.at[i, "anchor"] or (ok_age[i] and (prev is None or t >= prev + pd.Timedelta(days=CONFIG["quarantine_days"])))
+    if ok:
+        invited[i] = True
+        last[ph] = t
+
+# 5. status
+und = leg.cid.map(lambda x: int(hashlib.md5(x.encode()).hexdigest(), 16) % 1000 < CONFIG["undelivered_per_mille"])
+leg["est_status"] = ""
+leg.loc[invited, "est_status"] = "DELIVERED"
+leg.loc[invited & ~leg.anchor & und, "est_status"] = "UNDELIVERABLE"
+linked = leg.anchor & (leg.resp_status != "Deleted")
+
+# output
+out = d[["row_no"]].copy()
+out["row_kind"] = "platform"
+out.loc[raw_only, "row_kind"] = "legacy_raw"
+out.loc[legacy, "row_kind"] = "legacy_visit"
+out.loc[leg.index[invited], "row_kind"] = "legacy_invite"
+for c in RAW_COLS:  # lowercase names: the staging table is created with unquoted (lowercase) columns
+    out["raw_" + c.lower()] = d[c]
+out["legacy_sguid"] = ""
+out.loc[legacy, "legacy_sguid"] = leg.cid
+out["link_sguid"] = ""
+out.loc[leg.index[linked], "link_sguid"] = leg.loc[linked, "resp_sguid"]
+out["sguid_reused"] = ""
+out.loc[reused, "sguid_reused"] = "true"
+out["phone_clean"] = d.phone.str.replace(r"\D", "", regex=True)
+out.loc[out.phone_clean.str.len() < 8, "phone_clean"] = ""
+out["est_visit_date"] = ""
+out.loc[legacy, "est_visit_date"] = visit_local.dt.strftime("%Y-%m-%d %H:%M:00+00")
+out["est_sent_at"] = ""
+out.loc[leg.index[invited], "est_sent_at"] = leg.loc[invited, "sent"].dt.strftime("%Y-%m-%d %H:%M:%S+00")
+out["est_status"] = ""
+out.loc[legacy, "est_status"] = leg.est_status
+out["has_response"] = ""
+out.loc[leg.index[invited], "has_response"] = linked[invited].map({True: "true", False: "false"})
+out["procedure_out"] = d.get("procedure", pd.Series("", index=d.index)).str.strip()
+out.loc[platform | raw_only, "procedure_out"] = ""
+out["derived_year_of_birth"] = ""
+out.loc[legacy, "derived_year_of_birth"] = leg.yob_out
+out["sort_ts"] = ""
+out.loc[legacy, "sort_ts"] = leg.sent.dt.strftime("%Y-%m-%d %H:%M:%S")
+out.to_csv(OUT, index=False)
+
+# summary (stdout): counts, then estimated sends per quarter
+print("row kinds", out.row_kind.value_counts().to_dict())
+print("anchors", int(leg.anchor.sum()), "| linked responses", int(linked.sum()), "| deleted anchors", int((leg.anchor & ~linked).sum()),
+      "| reused-id rows", int(reused.sum()), "| invites", int(invited.sum()))
+inv = leg[invited]
+q = pd.DataFrame({"q": inv.sent.dt.tz_convert(TZ).dt.to_period("Q").astype(str), "deliv": inv.est_status == "DELIVERED",
+                  "resp": linked[invited]}).groupby("q").agg(sent=("deliv", "size"), delivered=("deliv", "sum"), responses=("resp", "sum"))
+q["resp_rate"] = (q.responses * 1000 / q.delivered + 0.5).astype(int) / 10
+print(q.to_string())
+print("busiest estimated send day:", int(inv.sent.dt.date.value_counts().max()), "invites")
