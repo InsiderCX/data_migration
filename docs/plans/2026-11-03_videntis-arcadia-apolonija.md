@@ -1,6 +1,6 @@
 # Plan: legacy import for Videntis, Arcadia and Apolonija
 
-Linear: [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) · Branch: `feat/DEV-162-legacy-import-videntis-arcadia-apolonija` · Owner: Ana · Agreed 3 Nov 2026
+Linear: [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) (upload) · [DEV-184](https://linear.app/insidercx/issue/DEV-184/validate-the-legacy-data-uploaded-to-dev) (validate on staging; done only when ops have validated the data) · Branch: `feat/DEV-162-legacy-import-videntis-arcadia-apolonija` · Owner: Ana · Agreed 3 Nov 2026
 
 Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 
@@ -11,7 +11,7 @@ Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 | 1 Discovery | done; account cards written; checklist `out/DEV-162_checks.xlsx` (git-ignored) |
 | 2 Load files | done; hashes in the account cards |
 | 3 SQL + mock tests | load path (01, 02, 03, 04, 99) done, mock test passes for all three; ops SQL (05–08) still to write |
-| 4 Staging | runbooks ready (`accounts/<account>/STAGING.md`); not run |
+| 4 Staging | **loaded and validated 3 Nov 2026** for all three (run logs in `accounts/<account>/runs/`); rollback tested; loads left on staging for ops. Open: rollback takes 35 min on Apolonija; ops SQL 05–08 |
 | 5–7 | not started |
 
 ## How we work

@@ -40,9 +40,9 @@ accounts/
 | Account | Region | Load code | Staging | Ops | Production |
 |---|---|---|---|---|---|
 | Stomatologija i estetika (`sie`) | EU | `SIE_LEGACY_V4` | validated 23–26 Oct 2026 | confirmed | **loaded 28 Oct 2026** (batch 13128); follow-ups open, see `accounts/sie/runs/2026-10-28_production.md` |
-| Videntis Dental Centar (`videntis`) | EU | `VIDENTIS_LEGACY_V1` | ready to run (SQL 01–04, 99; mock test passes) | — | — · [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) |
-| Arcadia (`arcadia`) | EU | `ARCADIA_LEGACY_V1` | ready to run (SQL 01–04, 99; mock test passes) | — | — · DEV-162 |
-| Stomatološka poliklinika Apolonija (`apolonija`) | EU | `APOLONIJA_LEGACY_V1` | ready to run (SQL 01–04, 99; mock test passes) | — | — · DEV-162 |
+| Videntis Dental Centar (`videntis`) | EU | `VIDENTIS_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13087), rollback tested | waiting for ops SQL | — · [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) |
+| Arcadia (`arcadia`) | EU | `ARCADIA_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13089), rollback tested | waiting for ops SQL | — · DEV-162 |
+| Stomatološka poliklinika Apolonija (`apolonija`) | EU | `APOLONIJA_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13091), rollback tested (35 min) | waiting for ops SQL | — · DEV-162 |
 
 ## Ground rules (short version; full list in `CLAUDE.md`)
 
