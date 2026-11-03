@@ -30,25 +30,30 @@ Typical for legacy data: responses (real), patients (real), doctor and comments 
 SIE methods (reuse if the data looks the same; re-validate if not):
 - **Send date:** legacy ids are sequential in time; fit isotonic regression id → (response start − send→response median) on the responded rows. Check the Spearman correlation is high (SIE: 0.994).
 - **Invite selection:** replay platform rules per phone (first visit invited, then not within `quarantine_days`, age ≥ `msg_age_limit`); responded rows always invited. Validate the replay on platform-era visits (SIE: recovered 93% of real invites, ~10% over).
+- **Send date, refined in DEV-162:** interpolate between isotonic block midpoints (not steps), and give id groups with Spearman < 0.95 the anchors' send-time quantiles by id rank; weekend dates move to Monday. Check estimated invites per day against the platform's daily volume; days with many real responses can be real batch days.
+- **Rows without a phone** are invites only when a real response proves it.
+- **Patients without `source_id`:** attach to the one existing Patient with that phone, else one new Patient per phone, else one per row.
 - **Visit date** = send − visit→send median. **Delivery status** = platform delivery rate, deterministic by hash.
-- **Year of birth** = year(visit) − age. Check what "age" means against existing patients (SIE: age at visit, not today).
+- **Year of birth** = year(visit) − age. Check what "age" means against existing patients **for every Account** (SIE: age at visit; Videntis: age in 2026).
 - **Procedure** derived from comments only if the Account's breakdowns need it; validate the rule on platform visits.
 
 ## 3. Build the Account folder
 
-Copy `accounts/sie/` to `accounts/<account>/` and change:
-- the Alchemer survey id, Account name check, time zone, load code (`<ACCOUNT>_LEGACY_V1`), source file name
-- builder constants (send hour, medians, delivery rate, id schemes, quarantine, age limit)
-- the hard-coded expected counts in `02_load.sql` (row kinds, responses to link, params) and the expectations in `03`, `06`, `07`, `08`
-- `06_compare_bi_responses.sql`: regenerate its inlined BI responses from the Account's BI export
-- the account card and `PRODUCTION.md`
-- start an empty `runs/` folder (don't copy SIE's logs)
+Since DEV-162 (Videntis, Arcadia, Apolonija, Nov 2026) new Accounts use a shared builder and generated SQL instead of copying SIE's hand-written files. Use `accounts/videntis/` as the example.
 
-Build the load file with `scripts/1_*` and `scripts/2_*`, record its SHA-256, and keep it in `data/` (git-ignored).
+1. Export the Account's unlinked Survey Responses from the prod replica into `data/db_unlinked_responses_<date>.csv` (`alchemer_response_id, sguid, started_utc, status, is_test`; sguid exactly as stored). The analyst's survey export can miss responses.
+2. Copy `scripts/1_build_load_file.py` from another new-style Account and change only its `CONFIG` block (send time, platform medians, quarantine, age rule, delivery rate, year-of-birth rule, raw-only ids). The code below `CONFIG` must stay identical in every Account: diff it.
+3. Build the load file: `python3 -I scripts/1_build_load_file.py data/<clinic csv> data/db_unlinked_responses_<date>.csv data/<account>_full_v1.csv`. Record its SHA-256 in the account card.
+4. Write `sql_config.json` (load code, Alchemer survey id, exact Account name, source and survey file names, platform start, a fixed uuid namespace, what is estimated). Then `python3 -I tools/render_legacy_sql.py accounts/<account> --update-expect` copies the counts from the load file and renders `sql/01, 02, 03, 04, 99`. Never edit the rendered SQL by hand: change the template or the config and render again.
+5. Write the account card, `STAGING.md` and, before production, `PRODUCTION.md`. Start an empty `runs/` folder.
+
+Ops SQL (05–08) for new-style Accounts: see the DEV-162 plan for status.
+
+SIE (`accounts/sie/`) keeps its hand-written v4 files; they are what ran on prod.
 
 ## 4. Test locally
 
-`bash accounts/<account>/tests/run_mock_test.sh <clinic file>`. Adapt `tests/make_mock.py` to the Account's ids and counts. All checks must pass. The test covers the real constraints: identity ids, `fk_last_processed_visit_id`, ticket and reminder-log foreign keys, the link trigger.
+`bash accounts/<account>/tests/run_mock_test.sh <clinic file>`. All checks must pass and the last line must read `ALL CHECKS PASSED`. The mock (`tools/legacy_mock/`) mirrors prod: the real constraints (identity ids, `fk_last_processed_visit_id`, ticket and reminder-log foreign keys), the link trigger **with** SIE's fallback, SIE's legacy tables and batch already present, Patients findable only by phone (one and two per phone), a Deleted response and reused ids. It runs 01 → import → 02 → checks → 03 → 04 (values identical) → 99 (back to baseline) → reload → 01 must refuse.
 
 ## 5. Staging (person runs, pastes results)
 

@@ -2,7 +2,7 @@
 
 Bringing an Account's **pre-platform history** (survey invites sent outside InsiderCX, and the responses they got) into the InsiderCX database, so Clinicdash shows it like any other period, ops can validate it, and the clinic's original file can be exported back unchanged.
 
-The first Account done this way is **Stomatologija i estetika** (`accounts/sie/`). The method is written down so the next Account follows the same path.
+The first Account done this way is **Stomatologija i estetika** (`accounts/sie/`). Videntis, Arcadia and Apolonija follow (plan: `docs/plans/2026-11-03_videntis-arcadia-apolonija.md`); they use a shared builder and generated SQL so several Accounts stay identical.
 
 ## Layout
 
@@ -16,9 +16,15 @@ docs/
   pitfalls.md             what went wrong before and how the scripts now prevent it
   ops-validation.md       what ops get (exports, workbook, visual report) and how to read it
   initial-prompt.md       the prompt that bootstrapped this repo in Claude Code
+  plans/                  one plan per import project (decisions, steps, open items)
+tools/
+  render_legacy_sql.py    renders an Account's SQL (01, 02, 03, 04, 99) from its sql_config.json (new-style Accounts)
+  legacy_mock/            shared mock database + test runner used by new-style Accounts' tests/
 accounts/
   <account>/              one folder per Account, self-contained
     README.md             account card: ids, inputs + hashes, assumptions, results, status
+    STAGING.md            staging runbook (new-style Accounts)
+    sql_config.json       what the SQL is rendered from (new-style Accounts)
     PRODUCTION.md         go/no-go + production steps for this Account
     sql/                  00 cleanup, 01 before import, 02 load, 03 validation, 04 export original,
                           05 ops field exports, 06 BI comparison, 07 report by period, 08 ops lists, 99 rollback
@@ -34,6 +40,9 @@ accounts/
 | Account | Region | Load code | Staging | Ops | Production |
 |---|---|---|---|---|---|
 | Stomatologija i estetika (`sie`) | EU | `SIE_LEGACY_V4` | validated 23–26 Oct 2026 | confirmed | **loaded 28 Oct 2026** (batch 13128); follow-ups open, see `accounts/sie/runs/2026-10-28_production.md` |
+| Videntis Dental Centar (`videntis`) | EU | `VIDENTIS_LEGACY_V1` | ready to run (SQL 01–04, 99; mock test passes) | — | — · [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) |
+| Arcadia (`arcadia`) | EU | `ARCADIA_LEGACY_V1` | ready to run (SQL 01–04, 99; mock test passes) | — | — · DEV-162 |
+| Stomatološka poliklinika Apolonija (`apolonija`) | EU | `APOLONIJA_LEGACY_V1` | ready to run (SQL 01–04, 99; mock test passes) | — | — · DEV-162 |
 
 ## Ground rules (short version; full list in `CLAUDE.md`)
 
