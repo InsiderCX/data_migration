@@ -84,7 +84,7 @@ All estimates.
 
 - **Alchemer = source of truth.** Complete / Partial before the platform start: Kvaternik 112 / 20, Mazalin 309 / 130, Optical 539 / 133, identical on staging and prod. Before 1 Sep 2026 identical too, except Mazalin: staging lacks 7 responses of 9 Jul 2026 (reached prod after the staging copy) and 1 response (submitted 16-20 Dec 2024) is Complete in Alchemer but Partial in our DB (B1, platform era).
 - **Zoho vs staging, legacy months, by response id:** all 30 months identical once the legacy responses are counted as linked. No Zoho response missing from staging. Responses only on staging: Deleted, test, no sguid, and Optical's 32 missing invites (A3).
-- **Zoho vs staging, platform months, by count:** every difference = responses without an invite (B2) or newer than the staging copy (Sep 2026 on).
+- **Zoho vs staging, newer (platform) months, by id:** checksum per month (count, sum, min, max of the response ids with an invite; Zoho query in `out/dev232/zoho_checksums.csv`). Identical in every month: Kvaternik 30, Mazalin 27, Optical 19. Exceptions: Mazalin Jul 2026 (staging lacks 7 later-synced responses; prod identical) and Nov 2026 (Zoho not refreshed yet). Responses without an invite (B2) are excluded on both sides.
 - Zoho sources: Poliklinika Kvaternik / `JOINED_FINAL`, Poliklinika Mazalin / `Joined`, Optical Express / `Joined_final`. Inputs in `out/dev232/` (git-ignored).
 - Alchemer single responses opened (status only kept): Mazalin 1896, 1898, 1901, 1909, all Partial as in our DB. Stopped there: `get_response` returns full answers and IP addresses.
 

@@ -64,6 +64,15 @@ ACC_ID = {v[2]: k for k, v in ACC.items()}
 stg = rd(f'{IN}/stg_responses.csv')
 prodall = rd(f'{IN}/prod_responses_all.csv')
 zmon = {(r['account'], r['month']): int(r['zoho']) for r in rd(f'{IN}/zoho_monthly.csv')}
+# Zoho id checksums per month (count, sum, min, max of response ids): an id-level check without copying every id
+zsum = {(r['account'], r['month']): tuple(int(r[k]) for k in ('n', 's', 'lo', 'hi')) for r in rd(f'{IN}/zoho_checksums.csv')}
+for line in open(f'{IN}/zoho_ids_opticalexpress.txt'):
+    m, s = line.rstrip('\n').split('\t'); ids = [int(x) for x in s.split()]
+    zsum[('opticalexpress', m)] = (len(ids), sum(ids), min(ids), max(ids))
+def checksum(rows, a_id, m):  # responses Zoho can see: linked to an invite, not Deleted, not test
+    ids = [int(r['rid']) for r in rows if int(r['acc']) == a_id and r['status'] != 'Deleted' and r.get('is_test') != 't'
+           and r['link'] != 'unlinked' and r['started_local'][:4] + r['started_local'][5:7] == m]
+    return (len(ids), sum(ids), min(ids), max(ids)) if ids else (0, 0, 0, 0)
 STG_CUT = '202609'
 ID_UNTIL = {'kvaternik': '202404', 'mazalin': '202406', 'opticalexpress': '202503'}   # by-id window: the legacy months   # the staging copy ends mid Sep 2026 (latest response 17-28 Sep); later months are not comparable
 all_rows, resp_rows, month_rows, load_rows, corrected, repeated, missing, other = [], [], [], [], [], [], [], []
@@ -143,7 +152,16 @@ for a, (name, sid, acc, zoho, start, batch, clinic) in ACC.items():
         elif d < 0 and pn - zn == 0: why = f'{-d} response(s) reached prod after the staging copy was made (prod {pn} = Zoho)'
         elif d < 0 and pn - zn == um[m]: why = f'{pn - sn} response(s) reached prod after the staging copy; {um[m]} unlinked without an invite'
         else: why = 'see sheet "Responses"'
-        all_rows.append([name, f'{m[:4]}-{m[4:]}', zn, sn, pn, d, wl, why])
+        if m in zmonths:
+            idc = 'identical by id once the legacy responses are counted (sheet "Responses")'
+        elif (a, m) in zsum:
+            ours = checksum(stg if m < STG_CUT else prodall, acc, m)
+            idc = 'identical' if ours == zsum[(a, m)] else (
+                'staging lacks the 7 late responses; prod identical' if checksum(prodall, acc, m) == zsum[(a, m)] else
+                'Zoho not refreshed yet (newest responses)' if m >= '202611' else 'DIFFERENT: see Ana')
+        else:
+            idc = ''
+        all_rows.append([name, f'{m[:4]}-{m[4:]}', zn, sn, pn, d, wl, why, idc])
     # what the load added (staging batch), by status source
     li = [r for r in load if r['row_kind'] == 'legacy_invite']
     src = collections.Counter(r['status_source'] for r in li); st = collections.Counter(r['est_status'] for r in li)
@@ -173,7 +191,7 @@ readme = [
     ['Append only', 'The load ONLY ADDS rows: legacy Patients, Patient Visits and survey invites (Visit Msgs). Nothing that already existed was changed. The legacy Survey Responses are NOT linked to the new invites (Ana, 6 Nov 2026). That is the main reason Clinicdash and Zoho differ for the legacy months. Question O1 decides it.'],
     ['Real vs estimated', 'REAL: Survey Responses, scores, dates started, SMS delivery status from the clinic files, visit dates (Mazalin, part of Optical), Patients. ESTIMATED (orange cells): send dates (all three), Optical delivery status where the file is empty and no response proves it (1,078 invites, 88.2% delivered = the platform rate). CORRECTED: 36 answered invites whose file status was not delivered are set to DELIVERED (sheet "Corrected statuses").'],
     ['Data cut-off', 'Staging (where the load is): copy of prod from mid Sep 2026, loads of 6 Nov 2026 (batches Kvaternik 13097, Mazalin 13095, Optical Express 13099). Prod replica, Alchemer, Zoho and the clinic files: 6 Nov 2026. Months from Sep 2026 on are newer than the staging copy.'],
-    ['How we compared', 'Alchemer is the source of truth: its Complete/Partial totals match staging exactly for all three Accounts (sheet "Alchemer vs DB"; one Mazalin exception, B1). Zoho vs staging: by response id for the legacy months (sheet "Responses"), by count for every month (sheet "All months"). Every difference has an explanation.'],
+    ['How we compared', 'Alchemer is the source of truth: its Complete/Partial totals match staging exactly for all three Accounts (sheet "Alchemer vs DB"; one Mazalin exception, B1). Zoho vs staging: by response id for the legacy months (sheet "Responses"); for the newer months by a checksum of the response ids per month (sheet "All months", last column). Every difference has an explanation.'],
     ['Definitions', 'Months by "Time Started" (Zagreb), as Clinicdash NPS. "Clinicdash today" = responses linked to an invite and with a score. "If linked" = today + the legacy responses the load would link if ops say yes. Response rate = responses / delivered.'],
     ['Patient data', 'This workbook has ids only (Alchemer response id, legacy invite id, clinic file line). If you need names for a decision, ask Ana for a restricted file.'],
 ]
@@ -194,7 +212,8 @@ sheet(wb, 'Load summary', ['Account', 'Staging batch', 'Legacy invites', 'Delive
                            'Response rate if linked (estimated)', 'Linked now', 'Status source', 'Statuses', 'Send dates (estimated)'],
       load_rows, [20, 10, 10, 10, 10, 14, 14, 8, 40, 50, 36], est_cols=(7, 11))
 sheet(wb, 'All months', ['Account', 'Month started', 'Zoho responses', 'Staging responses (not Deleted, not test)', 'Prod responses (6 Nov 2026)',
-                         'Staging − Zoho', 'Legacy responses on staging, not linked', 'Explanation'], all_rows, [20, 12, 12, 16, 14, 10, 14, 80])
+                         'Staging − Zoho', 'Legacy responses on staging, not linked', 'Explanation',
+                         'Same response ids as Zoho? (responses with an invite; count, sum, min and max of ids)'], all_rows, [20, 12, 12, 16, 14, 10, 14, 70, 34])
 sheet(wb, 'Legacy months', ['Account', 'Month started', 'Zoho responses', 'DB responses (not Deleted, not test)', 'Clinicdash today',
                       'Clinicdash after this load', 'Legacy responses, not linked', 'Clinicdash if linked', 'Zoho − if linked'],
       month_rows, [20, 12, 12, 14, 12, 14, 14, 14, 12])
