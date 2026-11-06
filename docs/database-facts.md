@@ -1,6 +1,6 @@
 # Database facts the scripts depend on
 
-Verified on the EU prod replica on 23–26 Oct 2026; facts 1–5, 7 and 11 re-checked on 3 Nov 2026. **Re-verify each one before a new Account** (queries below); if anything differs, update the scripts and this file.
+Verified on the EU prod replica on 23–26 Oct 2026; facts 1–5, 7 and 11 re-checked on 3 Nov 2026; facts 1–5 and 7 re-checked on 6 Nov 2026 for DEV-232 (trigger with the legacy fallback, function md5 `fedd9215…`). **Re-verify each one before a new Account** (queries below); if anything differs, update the scripts and this file.
 
 | # | Fact | Why it matters | Check |
 |---|---|---|---|

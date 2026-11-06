@@ -25,7 +25,11 @@ ROOT, OUT_MOCK, OUT_EXP = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 C = json.loads((ROOT / "sql_config.json").read_text())
 f = pd.read_csv(ROOT / "data" / C["load_file"], dtype=str, keep_default_na=False)
 ACC = C["account_id_prod"]
-TPL = {"videntis": [(79, "HR"), (80, "EN"), (81, "FR"), (82, "DE"), (83, "IT")], "arcadia": [(114, "HR")], "apolonija": [(84, "HR")]}[C["slug"]]
+TPL = {"videntis": [(79, "HR"), (80, "EN"), (81, "FR"), (82, "DE"), (83, "IT")], "arcadia": [(114, "HR")], "apolonija": [(84, "HR")],
+       "kvaternik": [(40, "HR", 2), (39, "HR", 1)], "mazalin": [(44, "HR", None)], "opticalexpress": [(112, "HR"), (113, "SL")]}[C["slug"]]
+TPL = [t + (1,) if len(t) == 2 else t for t in TPL]          # (id, language, mock Location id or None)
+# Locations as on EU prod (names matter: layout-2 loads resolve a row's Location by name)
+LOCS = {"kvaternik": ["Kvaternik Subiceva", "Kvaternik Kostanjevec"]}.get(C["slug"], [C["account_name"]])
 q = lambda xs: ",".join("'" + str(x).replace("'", "''") + "'" for x in xs)
 
 legacy = f[f.row_kind.isin(["legacy_invite", "legacy_visit"])]
@@ -51,7 +55,7 @@ CREATE EXTENSION hstore; CREATE EXTENSION "uuid-ossp";
 CREATE TYPE visit_msg_type_enum AS ENUM ('SURVEY_INVITE','INVITE_REMINDER');
 CREATE TYPE msg_sending_method_enum AS ENUM ('INFOBIP_OMNI_MAIN','INFOBIP_SMS_MAIN','INFOBIP_SMS_SUB');
 CREATE TABLE account(id serial primary key, name text, sms_sender varchar);
-CREATE TABLE location(id serial primary key, account_id int, quarantine_days int not null default 90);
+CREATE TABLE location(id serial primary key, account_id int, name text, quarantine_days int not null default 90);
 CREATE TABLE survey(id serial primary key, "accountId" int, "alchemerId" varchar);
 CREATE TABLE patient(id int GENERATED ALWAYS AS IDENTITY primary key, account_id int not null, first_name varchar, last_name varchar,
   phone varchar not null, source_id varchar, gender_code char, lead_source varchar, year_of_birth int, country_code char(3),
@@ -80,7 +84,8 @@ CREATE TABLE visit_msg(id uuid primary key, account_id int not null,
   template_id int references visit_msg_template(id), location_id int, meta hstore);
 CREATE TABLE survey_response(id serial primary key, "surveyId" int, sguid text, "alchemerResponseId" varchar, "dateSubmitted" timestamptz,
   status varchar, language varchar, comment_sentiment varchar,
-  visit_msg_id uuid references visit_msg(id) on update cascade on delete set null, "NPS_SCORE" numeric, "dateStarted" timestamptz);
+  visit_msg_id uuid references visit_msg(id) on update cascade on delete set null, "NPS_SCORE" numeric, "dateStarted" timestamptz,
+  "isTestData" boolean not null default false);
 
 -- SIE's legacy tables and trigger fallback, as on EU prod
 CREATE TABLE legacy_sending_batch (sending_batch_id int PRIMARY KEY REFERENCES visit_msg_sending_batch(id) ON DELETE CASCADE,
@@ -118,10 +123,10 @@ INSERT INTO legacy_sending_batch(sending_batch_id, account_id, code, comment) VA
 -- this Account, ids as on EU prod
 SELECT setval('account_id_seq', {ACC - 1});
 INSERT INTO account(name, sms_sender) VALUES ('{C['account_name']}', 'Mock');
-INSERT INTO location(account_id) VALUES ({ACC});
+INSERT INTO location(account_id, name) VALUES {", ".join(f"({ACC}, '{n}')" for n in LOCS)};
 INSERT INTO survey("accountId", "alchemerId") VALUES ({ACC}, '{C['alchemer_id']}');
 INSERT INTO visit_msg_template(id, account_id, location_id, language_code, type, sms_text) VALUES
-  {", ".join(f"({i},{ACC},1,'{l}','SURVEY_INVITE','{l} tpl')" for i, l in TPL)};
+  {", ".join(f"({i},{ACC},{'NULL' if loc is None else loc},'{l}','SURVEY_INVITE','{l} tpl')" for i, l, loc in TPL)};
 INSERT INTO patient(account_id, source_id, phone) VALUES ({ACC}, 'PLATFORMPAT', '385');
 INSERT INTO patient_visit(account_id, location_id, visit_date, patient_id)
   SELECT {ACC}, 1, '2025-06-01', (SELECT id FROM patient WHERE source_id = 'PLATFORMPAT') FROM generate_series(1, {len(plat)});

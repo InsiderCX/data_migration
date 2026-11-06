@@ -8,7 +8,7 @@ Import of the first months of **Poliklinika Mazalin** (EU, `insider-prod`) that 
 | Load code | `MAZALIN_LEGACY_V1` |
 | Account / Location / Survey | 24 / 31 / 13 on EU prod. Scripts resolve them from Alchemer survey **90553181** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | Step 1 (discovery) done 6 Nov 2026. Next: load file and mock test |
+| Status | Load file built and mock test passed 6 Nov 2026. Next: EU staging run ([`STAGING.md`](STAGING.md)) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 
@@ -69,3 +69,22 @@ Expected legacy figures, **if linked**: 2,399 delivered of 2,453 (97.8%), 437 re
 ## 6. Open items
 
 See the plan: O1 (link?), O4 (15 corrected statuses).
+
+## Step 2: load file (built 6 Nov 2026)
+
+```bash
+python3 -I scripts/1_build_load_file.py data/Pacijenti_Joined_Mazalin.csv data/db_unlinked_responses_2026-11-06.csv data/mazalin_full_v1.csv data/db_visit_msg_ids_2026-11-06.csv
+```
+
+| | |
+|---|---|
+| Load file | `data/mazalin_full_v1.csv`, SHA-256 `47059c8b07c045b9e54119ddcf988db001a9b505a3d816d5ace2c9556e728657` |
+| Row kinds | 30,481 rows: 28,028 platform / 2,453 legacy_invite |
+| Platform rows | decided by the Visit Msg ids on prod (`data/db_visit_msg_ids_2026-11-06.csv`) |
+| Send date (estimated) | wave 1, 12 Feb 2024 15:00 Zagreb: 1,566 invites (visits before 1 Feb 2024); wave 2, 27 Mar 2024 16:40: 887. 0 sends had to be moved before their response |
+| Status | from the file (real) 2,438; **corrected to DELIVERED 15** (answered). Result: DELIVERED 2,399, PENDING 21, UNDELIVERABLE 17, EXPIRED 10, REJECTED 6 |
+| Responses | 437 real responses on legacy invites, **not linked** (decision 2). If linked: 18.2% (platform 19.0%) |
+| Year of birth | 1900–2026 only; junk values → empty |
+| Original columns | `raw_*`, byte-identical; the export back (`04`) equals the clinic file (mock test) |
+
+SQL: `sql_config.json` (`layout` 2, `link_responses` false) rendered by `tools/render_legacy_sql.py`. Mock test: `bash tests/run_mock_test.sh data/Pacijenti_Joined_Mazalin.csv` → ALL CHECKS PASSED (6 Nov 2026), including: no existing row changed, no `legacy_invite_map` rows, 0 responses linked even after a simulated Alchemer sync.

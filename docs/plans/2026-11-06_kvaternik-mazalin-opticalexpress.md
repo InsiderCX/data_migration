@@ -9,7 +9,7 @@ Follows `docs/playbook.md`, with Videntis (`accounts/videntis/`) as the template
 | Step | Status |
 |---|---|
 | 1 Discovery, plan, account cards | **done 6 Nov 2026** |
-| 2 Builder changes, load files, rendered SQL, mock tests | not started |
+| 2 Builder changes, load files, rendered SQL, mock tests | **done 6 Nov 2026**. Shared builder and renderer extended with opt-in options; Videntis, Arcadia and Apolonija rebuild byte-identical load files and SQL; mock test passes for all six Accounts |
 | 3 EU staging run per Account | not started |
 | 4 Ops package (differences workbook, COPS checklist) | not started |
 
@@ -89,3 +89,5 @@ All estimates.
 | O4 | Mazalin, Optical | 36 answered rows with a non-delivered status, corrected to `DELIVERED` | Ops confirm |
 | O5 | Optical | Confirm no real send dates exist (old SMS providers) | Ops |
 | O6 | Kvaternik | 1 legacy row has shifted columns (`year_of_birth` = `#VALUE!`, a date in `language_code`) | Ops / clinic |
+| O7 | Optical | 1 legacy row is a test (text id, its only response Deleted); loaded as an invite as the file says | Ops confirm |
+| O8 | Optical | 299 answered invites have the send moved to 2 min before the response (estimate later than the real answer) | Info |

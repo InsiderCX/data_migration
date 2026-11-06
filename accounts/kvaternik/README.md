@@ -8,7 +8,7 @@ Import of the first weeks of **Kvaternik** (EU, `insider-prod`) that the platfor
 | Load code | `KVATERNIK_LEGACY_V1` |
 | Account / Locations / Survey | 21 / 27 Kvaternik Kostanjevec, 28 Kvaternik Subiceva / 11 on EU prod. Scripts resolve them from Alchemer survey **90677816** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | Step 1 (discovery) done 6 Nov 2026. Next: load file and mock test |
+| Status | Load file built and mock test passed 6 Nov 2026. Next: EU staging run ([`STAGING.md`](STAGING.md)) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 
@@ -71,3 +71,23 @@ Expected legacy figures, **if linked**: 696 delivered of 727 (95.7%), 132 respon
 ## 6. Open items
 
 See the plan: O1 (link?), O6 (shifted row).
+
+## Step 2: load file (built 6 Nov 2026)
+
+```bash
+python3 -I scripts/1_build_load_file.py data/Pacijenti_joined_Kvaternik.csv data/db_unlinked_responses_2026-11-06.csv data/kvaternik_full_v1.csv data/db_visit_msg_ids_2026-11-06.csv
+```
+
+| | |
+|---|---|
+| Load file | `data/kvaternik_full_v1.csv`, SHA-256 `ab2fdf835eeb52d0ff616a9890cd6c3bed2abe6ab9c18a0116a8ad0d6fcb0aea` |
+| Row kinds | 8,407 rows: 7,680 platform / 727 legacy_invite |
+| Platform rows | decided by the Visit Msg ids on prod (`data/db_visit_msg_ids_2026-11-06.csv`), not by `sent_at`: 6 platform rows have no `sent_at` |
+| Send date | all 727 on 21 Feb 2024 14:50 Zagreb (estimated); 0 sends had to be moved before their response |
+| Status | all 727 from the file (real): DELIVERED 696, REJECTED 13, PENDING 12, UNDELIVERABLE 5, EXPIRED 1 |
+| Location | by name: Subiceva 557 → Kvaternik Subiceva, Kostanjevec 170 → Kvaternik Kostanjevec; each with its own template |
+| Responses | 132 real responses on legacy invites, **not linked** (decision 2). If linked: 19.0% (platform 21.4%) |
+| Year of birth | 1900–2026 only; the shifted row's `#VALUE!` → empty (O6) |
+| Original columns | `raw_*`, byte-identical; the export back (`04`) equals the clinic file (mock test) |
+
+SQL: `sql_config.json` (`layout` 2, `link_responses` false) rendered by `tools/render_legacy_sql.py`. Mock test: `bash tests/run_mock_test.sh data/Pacijenti_joined_Kvaternik.csv` → ALL CHECKS PASSED (6 Nov 2026), including: no existing row changed, no `legacy_invite_map` rows, 0 responses linked even after a simulated Alchemer sync.

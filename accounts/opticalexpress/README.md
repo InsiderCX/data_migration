@@ -8,7 +8,7 @@ Import of the pre-platform history of **Optical Express** (EU, `insider-prod`): 
 | Load code | `OPTICALEXPRESS_LEGACY_V1` |
 | Account / Location / Survey | 44 / 79 / 25 on EU prod. Scripts resolve them from Alchemer survey **90535032** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | Step 1 (discovery) done 6 Nov 2026. Next: load file and mock test |
+| Status | Load file built and mock test passed 6 Nov 2026. Next: EU staging run ([`STAGING.md`](STAGING.md)) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 
@@ -73,3 +73,25 @@ Expected legacy figures, **if linked** (estimated): ≈3,654 delivered of 3,968 
 ## 6. Open items
 
 See the plan: O1 (link?), O2 (repeated ids), O3 (32 missing invites), O4 (21 corrected statuses), O5 (no real send dates).
+
+## Step 2: load file (built 6 Nov 2026)
+
+```bash
+python3 -I scripts/1_build_load_file.py data/Pacijenti_joined_OpticalExpress.csv data/db_unlinked_responses_2026-11-06.csv data/opticalexpress_full_v1.csv data/db_visit_msg_ids_2026-11-06.csv
+```
+
+| | |
+|---|---|
+| Load file | `data/opticalexpress_full_v1.csv`, SHA-256 `c92691de52ba7335fbfa3b21c3f8c458ef054389de7412f89c364a7b53e4387d` |
+| Row kinds | 7,931 rows: 3,850 platform / 3,966 legacy_invite / 2 legacy_visit / 113 legacy_raw |
+| legacy_visit (2) | rows without a usable phone (fewer than 8 digits) and no response: not an SMS invite (decision 15 of DEV-162) |
+| legacy_raw (113) | the 56 repeated ids (decision 7): stored as source rows only, for the export back and for ops (O2) |
+| Send date (estimated) | isotonic per id scheme where the ids are time-ordered (the big schemes `len6:70`, `len6:80`, `len7:70`, Spearman 0.97–0.997 in discovery). Rank quantiles for weak schemes: 2-digit (−0.22), 3-digit (0.81), `len5:70` (0.28). Median date for 2 tiny schemes (7 rows, one of them a test id). **299 answered invites** had an estimate after their response and were moved to 2 min before it |
+| Visit date | file 690, estimated 3,278 (3,271 without a date + 7 whose file date is after the estimated send) |
+| Status | file 2,613 (real), **corrected 21** (answered), from the response 254 (empty status, answered), estimated 1,078 (empty status, 88.2%). Result: DELIVERED 3,649, UNDELIVERABLE 212, REJECTED 94, EXPIRED 7, PENDING 4 |
+| Language | SLO → SL (template 113), HR → HR (112) |
+| Responses | 634 real responses on legacy invites, **not linked** (decision 2). If linked: 17.4% (platform 17.5%), estimated |
+| Note | one legacy invite is a test row (text id, its only response is Deleted); kept as in the file, listed for ops |
+| Original columns | `raw_*`, byte-identical; the export back (`04`) equals the clinic file (mock test) |
+
+SQL: `sql_config.json` (`layout` 2, `link_responses` false) rendered by `tools/render_legacy_sql.py`. Mock test: `bash tests/run_mock_test.sh data/Pacijenti_joined_OpticalExpress.csv` → ALL CHECKS PASSED (6 Nov 2026), including: no existing row changed, no `legacy_invite_map` rows, 0 responses linked even after a simulated Alchemer sync.
