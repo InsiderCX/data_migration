@@ -31,9 +31,13 @@ snap(){ $P -At -c "select 'patients='||(select count(*) from patient)||' visits=
 run(){ echo "== $1"; $P -v ON_ERROR_STOP=1 -f "sql/$1" 2>&1 | grep -E "ERROR|NOTICE: +Using|_LEGACY_V|^ *[0-9]+ *\|" | grep -v "does not exist, skipping" || true; }
 X(){ "$PYTHON" -I -c "import json,sys; print(json.load(open(sys.argv[1]))['expect'][sys.argv[2]])" "$ACC_DIR/sql_config.json" "$1"; }
 E(){ "$PYTHON" -I -c "import json,sys; v=json.load(open(sys.argv[1]))[sys.argv[2]]; print('' if v is None else v)" exp.json "$1"; }
+LINK=$("$PYTHON" -I -c "import json,sys; print(json.load(open(sys.argv[1])).get('link_responses', True))" "$ACC_DIR/sql_config.json")
 
 $P -v ON_ERROR_STOP=1 -f mock.sql >/dev/null
 BASE=$(snap); echo "baseline:       $BASE"
+# copies of every existing row: the load must not change any of them (append only)
+$P -c "create table zz_patient as select * from patient; create table zz_visit as select * from patient_visit;
+       create table zz_msg as select * from visit_msg; create table zz_resp as select * from survey_response;"
 run 01_before_import.sql
 $P -c "\\copy stg_${SLUG}_full FROM '$ACC_DIR/data/$LOAD' CSV HEADER NULL ''"
 check "staging rows" "$($P -At -c "select count(*) from stg_${SLUG}_full")" "$(X rows)"
@@ -52,6 +56,16 @@ check "rows attached to a Patient whose phone is shared" "$($P -At -c "select co
 check "existing Patients changed" "$($P -At -c "select count(*) from patient where created < (select loaded_at from legacy_sending_batch where sending_batch_id = $B_ID) and updated >= (select loaded_at from legacy_sending_batch where sending_batch_id = $B_ID)")" "0"
 check "visits without Patient" "$($P -At -c "select count(*) from legacy_source_row where row_kind in ('legacy_invite','legacy_visit') and patient_id is null")" "0"
 check "SIE untouched" "$($P -At -c "select count(*) from legacy_sending_batch where code = 'SIE_LEGACY_V4'")" "1"
+check "existing Patient Visits / Visit Msgs changed" "$($P -At -c "select (select count(*) from (select * from zz_visit except select * from patient_visit) a) + (select count(*) from (select * from zz_msg except select * from visit_msg) b)")" "0"
+check "legacy invites without a template" "$($P -At -c "select count(*) from visit_msg where sending_batch_id = $B_ID and template_id is null")" "0"
+check "legacy invites whose template is another Location's" "$($P -At -c "select count(*) from visit_msg vm join visit_msg_template t on t.id = vm.template_id where vm.sending_batch_id = $B_ID and t.location_id <> vm.location_id")" "0"
+if [ "$LINK" = "False" ]; then
+  echo "== append only (link_responses false)"
+  check "Survey Responses changed" "$($P -At -c "select count(*) from (select * from zz_resp except select * from survey_response) a")" "0"
+  check "legacy_invite_map rows for this Account" "$($P -At -c "select count(*) from legacy_invite_map m join survey s on s.\"accountId\" = m.account_id where s.\"alchemerId\" = '$("$PYTHON" -I -c "import json,sys; print(json.load(open(sys.argv[1]))['alchemer_id'])" "$ACC_DIR/sql_config.json")'")" "0"
+  $P -c "update survey_response set sguid = sguid"   # what an Alchemer sync does: fires the link trigger on every row
+  check "linked after a simulated Alchemer sync" "$($P -At -c "select count(*) from survey_response sr join visit_msg vm on vm.id = sr.visit_msg_id where vm.sending_batch_id = $B_ID")" "0"
+fi
 echo "== 03_validation.sql (each query must run)"
 "$PYTHON" -I - <<'EOF'
 qs = [q.strip() for q in open("sql/03_validation.sql").read().split(";\n") if "SELECT" in q and not q.strip().startswith("-- When")]

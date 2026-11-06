@@ -27,3 +27,9 @@ Caveats given to ops:
 - Read Dec 2023 – Feb 2024 together.
 - Legacy visit volume isn't comparable.
 - 27 responses can't be linked (test links, no sguid, ids missing from the clinic file).
+
+## DEV-232 package (Kvaternik, Mazalin, Optical Express; staging, 6 Nov 2026)
+
+One workbook per project, ids only: `out/DEV-232_ops_review_2026-11-06.xlsx`, built by `tools/dev232/build_ops_workbook.py` (inputs in `out/dev232/`). Sheets: Read me, Checklist (A legacy / B existing gaps / C sign-off, as in COPS-224), Load summary, All months (Zoho vs staging vs prod, with the explanation and an id check per month), Legacy months, Responses (one row per response, labelled), Corrected statuses, Repeated ids, Missing invites, Other rows, Alchemer vs DB. Ticket text: `out/dev232/COPS_ticket_DEV-232.txt`.
+
+Results (real numbers): Alchemer = staging for all three (legacy period and to 1 Sep 2026; one Mazalin status gap in Dec 2024). Zoho = staging by response id in all 30 legacy months once the legacy responses are counted, and in every newer month by id checksum (exceptions: staging copy age, Zoho not refreshed for Nov 2026). The load is append only, so on staging the legacy invites show 0 responses until ops decide to link them (A1).

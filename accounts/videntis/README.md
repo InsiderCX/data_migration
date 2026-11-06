@@ -8,7 +8,7 @@ Import of the pre-platform history of **Videntis Dental Centar** (EU, `insider-p
 | Load code | `VIDENTIS_LEGACY_V1` |
 | Account / Location / Survey | 38 / 59 / 19 on EU prod. Scripts resolve them from Alchemer survey **90508475** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | **Step 2 (load file) built 3 Nov 2026, waiting for Ana's check.** No SQL yet |
+| Status | **Loaded on EU staging 3 Nov 2026** (mock sending batch 13087), validated, export identical, rollback tested. Run log: [`runs/2026-11-03_staging.md`](runs/2026-11-03_staging.md). Next: ops SQL (05–08), ops sign-off |
 
 All numbers below are **real**, read from the EU prod replica or the input files on 3 Nov 2026, unless marked estimated.
 

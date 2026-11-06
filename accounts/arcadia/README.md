@@ -8,7 +8,7 @@ Import of the pre-platform history of **Arcadia** (EU, `insider-prod`), so Clini
 | Load code | `ARCADIA_LEGACY_V1` |
 | Account / Location / Survey | 45 / 78 / 27 on EU prod. Scripts resolve them from Alchemer survey **90534273** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | **Step 2 (load file) built 3 Nov 2026, waiting for Ana's check.** No SQL yet |
+| Status | **Loaded on EU staging 3 Nov 2026** (mock sending batch 13089), validated, export identical, rollback tested. Run log: [`runs/2026-11-03_staging.md`](runs/2026-11-03_staging.md). Next: ops SQL (05–08), ops sign-off |
 
 All numbers below are **real**, read from the EU prod replica or the input files on 3 Nov 2026, unless marked estimated.
 

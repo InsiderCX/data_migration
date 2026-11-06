@@ -8,6 +8,9 @@ Usage:
 
 The rendered .sql files are what a person runs in the GUI. Every Account gets the same SQL; only the config differs.
 Written for the Videntis / Arcadia / Apolonija imports (DEV-162). SIE's hand-written SQL in accounts/sie/ is unchanged.
+DEV-232 config keys (left out = DEV-162 SQL, unchanged): "layout": 2 (real SMS statuses, status_source in meta,
+language_out, Location per row by name), "link_responses": false (append only: no legacy_invite_map rows, responses
+untouched), "n_locations".
 """
 import json
 import pathlib
@@ -34,6 +37,8 @@ if "--update-expect" in sys.argv:
         "reused_invites": int((inv & (o.sguid_reused == "true")).sum()),
         "legacy_no_phone": int((legacy & (o.phone_clean == "")).sum()),
     }
+    if C.get("link_responses", True) is False:  # answered = real responses on legacy invites; nothing gets linked
+        C["expect"].update(answered=C["expect"]["linked"], linked=0, mapped_link=0)
     CFG_PATH.write_text(json.dumps(C, indent=2, ensure_ascii=False) + "\n")
     print("expect:", C["expect"])
 
@@ -47,9 +52,23 @@ R = lambda c: "raw_" + c.lower()          # staging column for an original colum
 q = lambda s: "'" + s.replace("'", "''") + "'"
 HEAD = f"-- {C['account_name']} legacy import ({CODE}). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.\n"
 
+V2 = C.get("layout", 1) == 2
+LINK = C.get("link_responses", True)
+ANS = X.get("answered", X["linked"])      # real responses on legacy invites (= linked unless link_responses is false)
+NLOC = C.get("n_locations", 1)
 STG_COLS = (["row_no", "row_kind"] + [R(c) for c in RAW] +
             ["legacy_sguid", "link_sguid", "sguid_reused", "phone_clean", "est_visit_date", "est_sent_at", "est_status",
-             "has_response", "procedure_out", "derived_year_of_birth", "sort_ts"])
+             "has_response", "procedure_out", "derived_year_of_birth", "sort_ts"] +
+            (["status_source", "language_out", "location_name", "country_out"] if V2 else []))
+LOC = "s.loc_id" if V2 else "c.location_id"                   # Location of a legacy row
+LANG = "s.language_out" if V2 else "upper(btrim(s.raw_language_code))"
+STATUSES = "'DELIVERED','UNDELIVERABLE','EXPIRED','REJECTED','PENDING'" if V2 else "'DELIVERED','UNDELIVERABLE'"
+SMS_NAME = ("CASE s.est_status WHEN 'DELIVERED' THEN 'DELIVERED_TO_HANDSET' WHEN 'EXPIRED' THEN 'EXPIRED_EXPIRED'\n"
+            "         WHEN 'REJECTED' THEN 'REJECTED_NETWORK' WHEN 'PENDING' THEN 'PENDING_ACCEPTED' ELSE 'UNDELIVERABLE_NOT_DELIVERED' END"
+            if V2 else "CASE s.est_status WHEN 'DELIVERED' THEN 'DELIVERED_TO_HANDSET' ELSE 'UNDELIVERABLE_NOT_DELIVERED' END")
+COUNTRY = ("(SELECT co.code FROM public.country co WHERE co.code = s.country_out)" if V2 else
+           "CASE upper(btrim(s.raw_country_code)) WHEN '' THEN NULL WHEN 'ROM' THEN 'ROU' ELSE left(upper(btrim(s.raw_country_code)), 3) END")
+META = "hstore(ARRAY['send_algo', 'legacy_import', 'status_source', s.status_source])" if V2 else "hstore('send_algo', 'legacy_import')"
 
 # ------------------------------------------------------------------------------------------------ 01
 s01 = HEAD + f"""-- Part 1: EVERYTHING BEFORE THE CSV IMPORT. Run the WHOLE file once.
@@ -146,9 +165,49 @@ SELECT to_regclass('public.legacy_sending_batch') AS t1,
 # ------------------------------------------------------------------------------------------------ 02
 raw_json = ",\n         ".join(f"{q(c)}, s.{R(c)}" for c in RAW)
 raw_sel = ",\n       ".join(f"coalesce({R(c)}::text, '') AS {R(c)}" for c in RAW)
+STEP7 = """-- 7) Link table + link the responses ----------------------------------------------------------------------------------
+-- Key = the sguid exactly as Alchemer stores it (link_sguid) for answered invites, else the legacy id.
+-- Not mapped: reused ids (decision 13) and sguids whose response is Deleted (decision 12).
+INSERT INTO public.legacy_invite_map (account_id, legacy_sguid, visit_msg_id)
+SELECT c.account_id, coalesce(s.link_sguid, s.legacy_sguid), s.visit_msg_id
+FROM stg s CROSS JOIN cfg c
+WHERE s.row_kind = 'legacy_invite' AND NOT s.sguid_reused
+  AND NOT EXISTS (SELECT 1 FROM public.survey_response sr WHERE sr."surveyId" = c.survey_id AND sr.status = 'Deleted'
+                  AND btrim(sr.sguid) = s.legacy_sguid);
+
+UPDATE public.survey_response sr SET sguid = sr.sguid             -- fires the trigger, which fills visit_msg_id
+FROM stg s, cfg c
+WHERE sr."surveyId" = c.survey_id AND sr.visit_msg_id IS NULL AND sr.sguid = s.link_sguid AND s.has_response;
+
+""".replace("{CODE}", CODE) if LINK else (
+    "-- 7) No linking (link_responses false, DEV-232 decision 2): no legacy_invite_map rows, Survey Responses untouched.\n"
+    "--    Ops decide; linking later = config change, rebuild, rerun.\n\n")
+V2_STG = "" if not V2 else (",\n       NULLIF(btrim(status_source::text), '')                AS status_source,"
+                              "\n       NULLIF(btrim(language_out::text), '')                 AS language_out,"
+                              "\n       NULLIF(btrim(location_name::text), '')                AS location_name,"
+                              "\n       NULLIF(btrim(country_out::text), '')                  AS country_out")
+LOC_SQL = "" if not V2 else (
+    "\n-- Location of each legacy row, resolved by name (never by a hard-coded id)\n"
+    "ALTER TABLE stg ADD COLUMN loc_id int;\n"
+    "UPDATE stg s SET loc_id = coalesce((SELECT l.id FROM public.location l, cfg c WHERE l.account_id = c.account_id\n"
+    "                                      AND l.name = NULLIF(btrim(s.location_name), '')), (SELECT location_id FROM cfg))\n"
+    "WHERE s.is_legacy;\n")
+V2_CHECKS = "" if not V2 else ("""
+  SELECT count(*) INTO n FROM stg WHERE is_legacy AND (loc_id IS NULL OR (NULLIF(btrim(location_name), '') IS NOT NULL
+     AND loc_id NOT IN (SELECT l.id FROM public.location l, cfg c WHERE l.account_id = c.account_id AND l.name = btrim(location_name))));
+    IF n > 0 THEN RAISE EXCEPTION 'legacy rows whose Location name is not found %', n; END IF;
+  -- append only: a legacy row must not be an invite that already exists (the platform rows are those)
+  SELECT count(*) INTO n FROM stg s JOIN public.visit_msg vm ON vm.account_id = (SELECT account_id FROM cfg)
+     AND btrim(s.raw_id) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND vm.id = btrim(s.raw_id)::uuid
+     WHERE s.is_legacy;
+    IF n > 0 THEN RAISE EXCEPTION 'legacy rows that already exist as Visit Msgs %', n; END IF;
+  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite' AND NULLIF(btrim(status_source), '') IS NULL;
+    IF n > 0 THEN RAISE EXCEPTION 'invites without status_source %', n; END IF;""")
+LINK_TXT = (f"links {X['linked']} legacy Survey Responses" if LINK else
+            f"links NO Survey Responses (link_responses false: the {ANS} real responses stay as they are, no legacy_invite_map rows)")
 s02 = HEAD + f"""-- Part 2: the load. Requires 01_before_import.sql, and {C['load_file']} imported into public.{T} (all columns TEXT).
 -- Creates: Patients that don't exist yet (existing Patients are never changed); {X['legacy_invite'] + X['legacy_visit']} legacy Patient Visits
--- (never surveyed); 1 mock sending batch with {X['legacy_invite']} legacy invites; links {X['linked']} legacy Survey Responses;
+-- (never surveyed); 1 mock sending batch with {X['legacy_invite']} legacy invites; {LINK_TXT};
 -- stores all {X['rows']} source rows untouched in legacy_source_row. Platform rows ({X['platform']}) are only linked, never created.
 -- Run the WHOLE file. Check the GUI's commit mode first. On any error: run ROLLBACK; and send the message.
 
@@ -169,7 +228,7 @@ DO $$ DECLARE c record; n int; BEGIN
   SELECT count(*) INTO n FROM cfg;
   IF n <> 1 THEN RAISE EXCEPTION 'Survey {AL} found % times - wrong database (EU vs UK?) or data not present', n; END IF;
   SELECT * INTO c FROM cfg;
-  IF c.n_locations <> 1 THEN RAISE EXCEPTION 'Account % has % Locations, expected 1', c.account_id, c.n_locations; END IF;
+  IF c.n_locations <> {NLOC} THEN RAISE EXCEPTION 'Account % has % Locations, expected {NLOC}', c.account_id, c.n_locations; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.account WHERE id = c.account_id AND name = {q(C['account_name'])}) THEN
     RAISE EXCEPTION 'Account % is not {C['account_name']}', c.account_id; END IF;
   IF c.sms_from IS NULL THEN RAISE EXCEPTION 'Account % has no sms_sender', c.account_id; END IF;
@@ -200,13 +259,13 @@ SELECT row_no::int AS row_no,
        NULLIF(btrim(procedure_out::text), '')               AS procedure_out,
        CASE WHEN NULLIF(btrim(derived_year_of_birth::text), '')::numeric BETWEEN 1900 AND 2026
             THEN NULLIF(btrim(derived_year_of_birth::text), '')::numeric::int END AS derived_year_of_birth,
-       NULLIF(btrim(sort_ts::text), '')::timestamp          AS sort_ts
+       NULLIF(btrim(sort_ts::text), '')::timestamp          AS sort_ts{V2_STG}
 FROM public.{T};
 
 ALTER TABLE stg ADD COLUMN patient_id int, ADD COLUMN pv_id int, ADD COLUMN visit_msg_id uuid,
                 ADD COLUMN sid text, ADD COLUMN is_legacy boolean;
 UPDATE stg SET sid = NULLIF(btrim(raw_source_id), ''), is_legacy = row_kind IN ('legacy_invite', 'legacy_visit');
-
+{LOC_SQL}
 -- 2) Prep checks ---------------------------------------------------------------------------------------------------
 DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg;                                  IF n <> {X['rows']} THEN RAISE EXCEPTION 'rows %, expected {X['rows']}', n; END IF;
@@ -223,7 +282,7 @@ DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg WHERE is_legacy AND (est_visit_date IS NULL OR legacy_sguid IS NULL);
     IF n > 0 THEN RAISE EXCEPTION 'incomplete legacy rows %', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE is_legacy AND phone_clean IS NULL; IF n <> {X['legacy_no_phone']} THEN RAISE EXCEPTION 'legacy rows without phone %, expected {X['legacy_no_phone']}', n; END IF;
-  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite' AND (est_sent_at IS NULL OR est_status NOT IN ('DELIVERED','UNDELIVERABLE'));
+  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite' AND (est_sent_at IS NULL OR est_status NOT IN ({STATUSES}));
     IF n > 0 THEN RAISE EXCEPTION 'incomplete invite rows %', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite' AND NOT has_response
      AND est_sent_at >= ('{C['platform_start']} 00:00'::timestamp AT TIME ZONE 'Europe/Zagreb');
@@ -233,7 +292,7 @@ DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg s JOIN public.survey_response sr
      ON sr."surveyId" = (SELECT survey_id FROM cfg) AND sr.sguid = s.link_sguid AND sr.visit_msg_id IS NULL
      WHERE s.has_response;
-    IF n <> {X['linked']} THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected {X['linked']} (staging older than prod?)', n; END IF;
+    IF n <> {ANS} THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected {ANS} (staging older than prod?)', n; END IF;{V2_CHECKS}
 END $$;
 
 UPDATE stg SET visit_msg_id = uuid_generate_v5({q(C['uuid_ns'])}::uuid, {q(C['slug'] + '-legacy-')} || row_no) WHERE row_kind = 'legacy_invite';
@@ -269,8 +328,8 @@ OVERRIDING SYSTEM VALUE
 SELECT np.id, c.account_id, s.sid,
        NULLIF(btrim(s.raw_first_name), ''), NULLIF(btrim(s.raw_last_name), ''), coalesce(s.phone_clean, ''),
        CASE WHEN upper(btrim(s.raw_gender_code)) IN ('F','M') THEN upper(btrim(s.raw_gender_code)) END,
-       CASE WHEN upper(btrim(s.raw_language_code)) ~ '^[A-Z]{{2}}$' THEN upper(btrim(s.raw_language_code)) END,
-       CASE upper(btrim(s.raw_country_code)) WHEN '' THEN NULL WHEN 'ROM' THEN 'ROU' ELSE left(upper(btrim(s.raw_country_code)), 3) END,
+       CASE WHEN {LANG} ~ '^[A-Z]{{2}}$' THEN {LANG} END,
+       {COUNTRY},
        s.derived_year_of_birth, NULLIF(btrim(s.raw_lead_source), '')
 FROM np JOIN stg s ON s.row_no = np.row_no CROSS JOIN cfg c;
 
@@ -305,7 +364,7 @@ UPDATE stg SET pv_id = nextval(pg_get_serial_sequence('public.patient_visit', 'i
 
 INSERT INTO public.patient_visit (id, account_id, location_id, patient_id, visit_date, doctor, procedure, comment)
 OVERRIDING SYSTEM VALUE
-SELECT s.pv_id, c.account_id, c.location_id, s.patient_id, s.est_visit_date,
+SELECT s.pv_id, c.account_id, {LOC}, s.patient_id, s.est_visit_date,
        NULLIF(btrim(s.raw_doctor), ''), s.procedure_out, NULLIF(btrim(s.raw_comment), '')
 FROM stg s CROSS JOIN cfg c WHERE s.is_legacy;
 
@@ -319,37 +378,23 @@ WHERE id = (SELECT batch_id FROM sb);
 INSERT INTO public.visit_msg (id, invite_id, account_id, location_id, patient_visit_id, sending_batch_id, template_id,
                               sms_from, destination, sms_text, status, sms_status_group, sms_status_name,
                               created_at, sent_at, status_updated_at, quarantine_expiration, meta)
-SELECT s.visit_msg_id, s.visit_msg_id, c.account_id, c.location_id, s.pv_id, (SELECT batch_id FROM sb), t.id,
+SELECT s.visit_msg_id, s.visit_msg_id, c.account_id, {LOC}, s.pv_id, (SELECT batch_id FROM sb), t.id,
        c.sms_from, coalesce(s.phone_clean, ''), coalesce(t.sms_text, '[legacy invite]'),
        s.est_status, s.est_status,
-       CASE s.est_status WHEN 'DELIVERED' THEN 'DELIVERED_TO_HANDSET' ELSE 'UNDELIVERABLE_NOT_DELIVERED' END,
+       {SMS_NAME},
        s.est_sent_at - interval '54 seconds', s.est_sent_at, s.est_sent_at + interval '27393 seconds',
        s.est_sent_at + make_interval(days => c.quarantine_days),
-       hstore('send_algo', 'legacy_import')
+       {META}
 FROM stg s CROSS JOIN cfg c
 LEFT JOIN LATERAL (
   SELECT vt.id, vt.sms_text FROM public.visit_msg_template vt
   WHERE vt.account_id = c.account_id AND vt.type = 'SURVEY_INVITE'
-    AND (vt.location_id = c.location_id OR vt.location_id IS NULL)
-  ORDER BY (vt.language_code = upper(btrim(s.raw_language_code))) DESC, (vt.language_code = 'HR') DESC, vt.id
+    AND (vt.location_id = {LOC} OR vt.location_id IS NULL)
+  ORDER BY (vt.language_code = {LANG}) DESC, (vt.language_code = 'HR') DESC, vt.id
   LIMIT 1) t ON true
 WHERE s.row_kind = 'legacy_invite';
 
--- 7) Link table + link the responses ----------------------------------------------------------------------------------
--- Key = the sguid exactly as Alchemer stores it (link_sguid) for answered invites, else the legacy id.
--- Not mapped: reused ids (decision 13) and sguids whose response is Deleted (decision 12).
-INSERT INTO public.legacy_invite_map (account_id, legacy_sguid, visit_msg_id)
-SELECT c.account_id, coalesce(s.link_sguid, s.legacy_sguid), s.visit_msg_id
-FROM stg s CROSS JOIN cfg c
-WHERE s.row_kind = 'legacy_invite' AND NOT s.sguid_reused
-  AND NOT EXISTS (SELECT 1 FROM public.survey_response sr WHERE sr."surveyId" = c.survey_id AND sr.status = 'Deleted'
-                  AND btrim(sr.sguid) = s.legacy_sguid);
-
-UPDATE public.survey_response sr SET sguid = sr.sguid             -- fires the trigger, which fills visit_msg_id
-FROM stg s, cfg c
-WHERE sr."surveyId" = c.survey_id AND sr.visit_msg_id IS NULL AND sr.sguid = s.link_sguid AND s.has_response;
-
--- 8) Platform rows: link to the existing invite / visit (nothing created) ----------------------------------------------
+{STEP7}-- 8) Platform rows: link to the existing invite / visit (nothing created) ----------------------------------------------
 UPDATE stg s SET visit_msg_id = vm.id, pv_id = vm.patient_visit_id
 FROM public.visit_msg vm, cfg c
 WHERE s.row_kind = 'platform' AND vm.account_id = c.account_id
@@ -402,6 +447,22 @@ COMMIT;
 
 # ------------------------------------------------------------------------------------------------ 03
 B = f"(SELECT sending_batch_id FROM legacy_sending_batch WHERE code = {q(CODE)})"
+IF_LINKED = "" if LINK else f"""
+-- 4) Not linked (link_responses false): what each legacy quarter WOULD show if ops decide to link (ESTIMATED sends,
+--    real responses matched by sguid = the clinic id). Expect {ANS} responses in total; linked_now must be 0.
+SELECT date_trunc('quarter', vm.sent_at AT TIME ZONE 'Europe/Zagreb')::date AS quarter,
+       count(*) AS sent,
+       count(*) FILTER (WHERE vm.status = 'DELIVERED') AS delivered,
+       count(sr.id) AS responses_if_linked,
+       floor(1000.0 * count(sr.id) / NULLIF(count(*) FILTER (WHERE vm.status = 'DELIVERED'), 0) + 0.5) / 10 AS response_rate_if_linked,
+       count(sr.id) FILTER (WHERE sr.visit_msg_id IS NOT NULL) AS linked_now
+FROM legacy_source_row r
+JOIN visit_msg vm ON vm.id = r.visit_msg_id AND vm.sending_batch_id IN {B}
+LEFT JOIN survey_response sr ON sr."surveyId" = (SELECT id FROM survey WHERE "alchemerId"::text = {q(AL)})
+  AND btrim(sr.sguid) = btrim(r.raw->>'id') AND sr.status <> 'Deleted' AND NOT coalesce(sr."isTestData", false)
+WHERE r.source_file = {q(SRC)}
+GROUP BY 1 ORDER BY 1;
+"""
 s03 = HEAD + f"""-- Part 3: validation (read-only). Run each query on its own.
 
 -- 1) Summary: expect {X['rows']} source rows, {X['legacy_invite'] + X['legacy_visit']} legacy visits, {X['legacy_invite']} invites, {X['linked']} linked,
@@ -445,7 +506,7 @@ SELECT count(*) AS responses,
 FROM survey_response sr
 JOIN visit_msg vm ON vm.id = sr.visit_msg_id
 WHERE vm.sending_batch_id IN {B} AND sr."NPS_SCORE" BETWEEN 0 AND 10;
-
+{IF_LINKED}
 -- When satisfied: DROP TABLE public.{T};   -- contains PII
 """
 

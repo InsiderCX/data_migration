@@ -1,6 +1,6 @@
 # Plan: legacy import for Videntis, Arcadia and Apolonija
 
-Linear: [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) · Branch: `feat/DEV-162-legacy-import-videntis-arcadia-apolonija` · Owner: Ana · Agreed 3 Nov 2026
+Linear: [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) (upload) · [DEV-184](https://linear.app/insidercx/issue/DEV-184/validate-the-legacy-data-uploaded-to-dev) (validate on staging; done only when ops have validated the data) · Branch: `feat/DEV-162-legacy-import-videntis-arcadia-apolonija` · Owner: Ana · Agreed 3 Nov 2026
 
 Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 
@@ -11,8 +11,51 @@ Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 | 1 Discovery | done; account cards written; checklist `out/DEV-162_checks.xlsx` (git-ignored) |
 | 2 Load files | done; hashes in the account cards |
 | 3 SQL + mock tests | load path (01, 02, 03, 04, 99) done, mock test passes for all three; ops SQL (05–08) still to write |
-| 4 Staging | runbooks ready (`accounts/<account>/STAGING.md`); not run |
+| 4 Staging | **loaded 3 Nov 2026** for all three (run logs in `accounts/<account>/runs/`); rollback tested; loads left on staging for ops. **Compared with Zoho (old BI): every difference explained** (run logs, section "Comparison with Zoho Analytics") |
+| 5 Ops validation (DEV-184) | **sent to ops 4 Nov 2026** as Linear [COPS-224](https://linear.app/insidercx/issue/COPS-224) (Karlo), with two workbooks. Waiting for answers. DEV-184 is done only when ops have validated the data |
 | 5–7 | not started |
+
+## Where we stopped (4 Nov 2026, end of day)
+
+Branch `feat/DEV-184-validate-legacy-data-staging` (pushed, no PR yet). DEV-162 work is merged (PRs #2, #3). Staging password rotated 4 Nov 2026; connection verified read-only. Loads still on staging: Videntis 13087, Arcadia 13089, Apolonija 13091.
+
+**Done 4 Nov 2026 (read-only research):**
+- Every linked legacy response checked on staging: one response per invite, none Deleted / test / wrong Account / started before its (estimated) send. 3 started after the platform began (Videntis 647, Arcadia 1964, Apolonija 1261): **Ana decided to keep them linked.**
+- Zoho, Clinicdash and Alchemer compared **by Alchemer response id**, for the legacy and the platform era. Every difference is labelled; every month reconciles.
+- Two workbooks for ops (git-ignored, patient data in the reused-ids sheet), built by `tools/dev184/`:
+  - `out/DEV-184_legacy_differences_2026-11-04.xlsx`: differences caused by the load, Arcadia reused ids (both candidate rows side by side), prod totals per month after the load (projected), Alchemer vs DB totals.
+  - `out/DEV-184_platform_era_differences_2026-11-04.xlsx`: gaps that already exist today, unrelated to the load.
+- Sent to ops as Linear **COPS-224** (Karlo): checklist A1–A6 (legacy), B1–B3 (platform era), C1 (sign-off).
+
+**Findings (real numbers, 4 Nov 2026):**
+
+| Account | Zoho all time | Clinicdash today | Added by load | Clinicdash after load | Gap explained by |
+|---|---|---|---|---|---|
+| Videntis | 985 | 481 | 501 | 982 | −3 legacy responses without score |
+| Arcadia | 2,346 | 1,275 | 979 | 2,254 | −93 reused ids, −1 no score, +2 not yet in Zoho |
+| Apolonija | 2,469 | 1,137 | 1,517 | 2,654 | +44 sguid space/text, +2 deleted in Alchemer, +136 Zoho join drop, +3 not yet in Zoho |
+
+- **Apolonija 127 and 300 are Deleted in Alchemer** (since 8 Nov 2024) but Complete in the DB; the load links them. Clinicdash counts Deleted responses when linked, so a resync alone won't hide them.
+- **Zoho's Apolonija `JOINED` drops 136 responses (Mar–Aug 2026)**; its raw table `Apolonija_export_FINAL` has them. Clinicdash is right.
+- **Arcadia 2267 is stored twice** (good API copy + broken webhook copy dated 1970, DB id 309489). The only duplicate in the 3 surveys.
+- Alchemer's API cannot filter by response id; single responses were opened with `get_response` (Ana's permission), nothing kept but status, dates, score, sguid.
+- Zoho via Zamera: 20 rows per query (pack ids with `GROUP_CONCAT` per month) and "Access Denied" / error 6045 after a burst; wait 10–30 min.
+
+**Open, in order:**
+1. **Karlo (COPS-224):** A1 pick the Patient for 93 Arcadia responses; A2–A6 and B1–B3 confirmations; C1 written sign-off per Account (closes DEV-184).
+2. **Ana decides:** exclude Apolonija 127 and 300 from the load (recommended), or wait for a dev resync. Excluding = config change, re-render, mock test, Apolonija staging rerun.
+3. **After Karlo's A1 answers:** link the decided reused-id responses (config change, re-render, mock test, Arcadia staging rerun).
+4. **Claude, before production (DEV-162):** make `99_rollback.sql` faster (Apolonija took 35 min on staging), re-test on staging; write each Account's `PRODUCTION.md`.
+5. **Dev ticket (not opened yet):** delete the broken Arcadia 2267 copy and find why the webhook stored it; resync deletions from Alchemer.
+6. **Ana / clinic:** C04 (Videntis' responses whose invite is missing), C05 / C06 (Apolonija's rows without id and `#N/A` ids).
+7. After ops sign-off: drop the staging tables with patient data (`stg_videntis_full`, `stg_arcadia_full`, `stg_apolonija_full`, and SIE's old `stg_sie_full`).
+
+**Where things are:**
+- Local, git-ignored: patient files and load files in `accounts/<account>/data/`; the checklist and exports in `out/`; comparison data in `out/dev162/`.
+- Rebuild the checklist: `.venv/bin/python -I tools/dev162/build_checks_workbook.py "$PWD" out/dev162/unlinked.tsv out/DEV-162_checks.xlsx`.
+- Rebuild the ops workbooks (inputs in `out/dev184/`, from staging, prod replica, Zoho and Alchemer on 4 Nov 2026): `.venv/bin/python -I tools/dev184/build_differences_workbook.py "$PWD" out/dev184 out/DEV-184_legacy_differences_2026-11-04.xlsx` and `.venv/bin/python -I tools/dev184/build_platform_differences_workbook.py out/dev184 out/DEV-184_platform_era_differences_2026-11-04.xlsx`.
+- Staging runs: `bash tools/run_staging.sh <account> <clinic csv>` (refuses anything but `insider-eu-stg`). Production is never run by Claude without Ana's explicit permission.
+- Zoho through Zamera blocks the token after a burst of calls ("Access Denied"); wait and retry, keep calls few.
 
 ## How we work
 
