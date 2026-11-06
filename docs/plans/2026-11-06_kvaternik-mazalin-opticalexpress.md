@@ -13,6 +13,19 @@ Follows `docs/playbook.md`, with Videntis (`accounts/videntis/`) as the template
 | 3 EU staging run per Account | **done 6 Nov 2026**, all three loaded and left for ops: Kvaternik batch 13097, Mazalin 13095, Optical Express 13099. Run logs in `accounts/<account>/runs/2026-11-06_staging.md`. Found and fixed on staging: country foreign key (decision 13) |
 | 4 Ops package (differences workbook, COPS checklist) | **ready 6 Nov 2026**, waiting for Ana to create the COPS ticket. Workbook `out/DEV-232_ops_review_2026-11-06.xlsx` (git-ignored, ids only), built by `tools/dev232/build_ops_workbook.py`; ticket text `out/dev232/COPS_ticket_DEV-232.txt` |
 
+## Where we stopped (6 Nov 2026, end of day)
+
+Branch `feat/DEV-232-legacy-import-kvaternik-mazalin-opticalexpress` (stacked on DEV-184; local commits, not pushed, no PR). All three Accounts are loaded on EU staging and left there for ops: Kvaternik batch 13097, Mazalin 13095, Optical Express 13099. Append only, 0 responses linked.
+
+**Waiting for ops** (COPS ticket created by Ana from `out/dev232/COPS_ticket_DEV-232.txt`, workbook `out/DEV-232_ops_review_2026-11-06.xlsx`): A1 link?, A2 Optical repeated ids, A3 Optical missing invites, A4 corrected statuses, A5 estimates, A6 other rows, B1/B2 acknowledge, C1 sign-off per Account.
+
+**Nothing goes to production before the ops confirmation.** Then, per Account (`accounts/<account>/PRODUCTION.md`):
+1. Apply the answers (config change, rebuild, re-render, mock test, staging rerun). A1 = link is the biggest change.
+2. Refresh the unlinked responses and Visit Msg ids from the prod replica, rebuild, compare hashes.
+3. PR review by a dev (DEV-162 decision 10), merge, then the production session with Ana's explicit permission.
+
+Open from earlier and still valid: make `99_rollback.sql` faster (DEV-162 item 4); dev ticket for B1 (Mazalin status resync).
+
 ## How we work
 
 - A person checks every step. After each step Claude stops with an overview (what was done, real vs estimated numbers, what is open). The next step starts only when Ana confirms.

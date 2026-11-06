@@ -8,7 +8,7 @@ Import of the first weeks of **Kvaternik** (EU, `insider-prod`) that the platfor
 | Load code | `KVATERNIK_LEGACY_V1` |
 | Account / Locations / Survey | 21 / 27 Kvaternik Kostanjevec, 28 Kvaternik Subiceva / 11 on EU prod. Scripts resolve them from Alchemer survey **90677816** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | **Loaded on EU staging 6 Nov 2026**, validated, export identical, rollback tested. Run log: [`runs/2026-11-06_staging.md`](runs/2026-11-06_staging.md). Next: ops package (step 4) |
+| Status | **Loaded on EU staging 6 Nov 2026**, validated, export identical, rollback tested. Run log: [`runs/2026-11-06_staging.md`](runs/2026-11-06_staging.md). Ops package sent (DEV-232, COPS ticket). **Production only after ops sign-off**: [`PRODUCTION.md`](PRODUCTION.md) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 

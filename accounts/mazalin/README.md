@@ -8,7 +8,7 @@ Import of the first months of **Poliklinika Mazalin** (EU, `insider-prod`) that 
 | Load code | `MAZALIN_LEGACY_V1` |
 | Account / Location / Survey | 24 / 31 / 13 on EU prod. Scripts resolve them from Alchemer survey **90553181** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | **Loaded on EU staging 6 Nov 2026**, validated, export identical, rollback tested. Run log: [`runs/2026-11-06_staging.md`](runs/2026-11-06_staging.md). Next: ops package (step 4) |
+| Status | **Loaded on EU staging 6 Nov 2026**, validated, export identical, rollback tested. Run log: [`runs/2026-11-06_staging.md`](runs/2026-11-06_staging.md). Ops package sent (DEV-232, COPS ticket). **Production only after ops sign-off**: [`PRODUCTION.md`](PRODUCTION.md) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 

@@ -43,9 +43,9 @@ accounts/
 | Videntis Dental Centar (`videntis`) | EU | `VIDENTIS_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13087), rollback tested | waiting for ops SQL | — · [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) |
 | Arcadia (`arcadia`) | EU | `ARCADIA_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13089), rollback tested | waiting for ops SQL | — · DEV-162 |
 | Stomatološka poliklinika Apolonija (`apolonija`) | EU | `APOLONIJA_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13091), rollback tested (35 min) | waiting for ops SQL | — · DEV-162 |
-| Kvaternik (`kvaternik`) | EU | `KVATERNIK_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13097), rollback tested, append only (0 linked) | — | — · [DEV-232](https://linear.app/insidercx/issue/DEV-232/upload-legacy-data-for-kvaternik-mazalin-and-opticalexpress-to-the-stg) |
-| Poliklinika Mazalin (`mazalin`) | EU | `MAZALIN_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13095), rollback tested, append only (0 linked) | — | — · DEV-232 |
-| Optical Express (`opticalexpress`) | EU | `OPTICALEXPRESS_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13099), rollback tested, append only (0 linked) | — | — · DEV-232 |
+| Kvaternik (`kvaternik`) | EU | `KVATERNIK_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13097), rollback tested, append only (0 linked) | waiting for ops (COPS ticket, DEV-232) | after ops sign-off · [DEV-232](https://linear.app/insidercx/issue/DEV-232/upload-legacy-data-for-kvaternik-mazalin-and-opticalexpress-to-the-stg) |
+| Poliklinika Mazalin (`mazalin`) | EU | `MAZALIN_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13095), rollback tested, append only (0 linked) | waiting for ops (COPS ticket, DEV-232) | after ops sign-off · DEV-232 |
+| Optical Express (`opticalexpress`) | EU | `OPTICALEXPRESS_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13099), rollback tested, append only (0 linked) | waiting for ops (COPS ticket, DEV-232) | after ops sign-off · DEV-232 |
 
 ## Ground rules (short version; full list in `CLAUDE.md`)
 

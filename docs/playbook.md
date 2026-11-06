@@ -49,6 +49,8 @@ Since DEV-162 (Videntis, Arcadia, Apolonija, Nov 2026) new Accounts use a shared
 
 Ops SQL (05–08) for new-style Accounts: see the DEV-162 plan for status.
 
+Since DEV-232 (Kvaternik, Mazalin, Optical Express, Nov 2026) the builder and renderer have opt-in options for files that differ from the DEV-162 ones; left out, they keep the DEV-162 behaviour, and Videntis, Arcadia and Apolonija rebuild byte-identical. `layout: 2` with `platform_rule: db_ids` (platform rows = the Account's Visit Msg ids on prod), `status_rule: file` (real SMS status, `status_source` in `visit_msg.meta`), `send_rule: waves` (bulk sends seen in the responses), `invite_rule: all`, `reused_rule: raw_only`, `location_map`, `country_map`, `language_map`, and `link_responses: false` in `sql_config.json` (append only: no response is linked and no map row written). Use `accounts/mazalin/` as the example for these.
+
 SIE (`accounts/sie/`) keeps its hand-written v4 files; they are what ran on prod.
 
 ## 4. Test locally
@@ -67,7 +69,7 @@ Differences between staging and BI must all be explained by the staging copy's a
 
 ## 6. Ops validation
 
-Hand ops the material in `ops-validation.md`: the visual report, the workbook, the BI comparison, and the "real vs estimated" list, plus the caveats specific to the Account (gaps in the estimate, legacy volumes that aren't comparable). Get written confirmation.
+Compare before handing over (DEV-232 method): **Alchemer is the source of truth** (`count_responses` per status and period against staging and prod); **Zoho by response id** for the legacy months (`GROUP_CONCAT` per month) and by an id checksum per month for the newer months; responses without an invite are excluded on both sides and listed. Every month gets an explanation. Then hand ops the material in `ops-validation.md`: the visual report, the workbook, the BI comparison, and the "real vs estimated" list, plus the caveats specific to the Account (gaps in the estimate, legacy volumes that aren't comparable). Get written confirmation.
 
 ## 7. Production
 
