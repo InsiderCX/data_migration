@@ -104,7 +104,8 @@ CREATE TABLE public.stg_kvaternik_full (
   sort_ts                        text,
   status_source                  text,
   language_out                   text,
-  location_name                  text
+  location_name                  text,
+  country_out                    text
 );
 
 COMMIT;

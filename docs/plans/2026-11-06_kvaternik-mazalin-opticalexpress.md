@@ -10,7 +10,7 @@ Follows `docs/playbook.md`, with Videntis (`accounts/videntis/`) as the template
 |---|---|
 | 1 Discovery, plan, account cards | **done 6 Nov 2026** |
 | 2 Builder changes, load files, rendered SQL, mock tests | **done 6 Nov 2026**. Shared builder and renderer extended with opt-in options; Videntis, Arcadia and Apolonija rebuild byte-identical load files and SQL; mock test passes for all six Accounts |
-| 3 EU staging run per Account | not started |
+| 3 EU staging run per Account | **done 6 Nov 2026**, all three loaded and left for ops: Kvaternik batch 13097, Mazalin 13095, Optical Express 13099. Run logs in `accounts/<account>/runs/2026-11-06_staging.md`. Found and fixed on staging: country foreign key (decision 13) |
 | 4 Ops package (differences workbook, COPS checklist) | not started |
 
 ## How we work
@@ -66,6 +66,7 @@ Inputs are in `accounts/<account>/data/` (git-ignored, PII). SHA-256:
 9. **Patients:** same as DEV-162 decision 14. With `source_id`: the existing Patient (`ON CONFLICT`), never changed, else a new one. Without: the one Patient with that phone, else one new Patient per phone.
 10. **Year of birth** from the file only when 1900–2026, else empty (raw kept). Optical's `0` = empty. No age rule: the files hold years, not ages.
 11. **Kvaternik Location** comes from the row: `Kostanjevec` → 27, `Subiceva` → 28. Each Location's own SURVEY_INVITE template (40, 39).
+13. (6 Nov 2026, found on staging) **Country** goes to the Patient only as a code that exists in `public.country` (foreign key `fk_country_code`). The builder maps each Account's values explicitly (Mazalin `IE → IRL`, `XK → XXK`, `RS → SER`, …; Optical's Croatian names `SLOVENIJA → SVN`, …). The mock now has the country table and the key.
 12. **Response-rate check** (if linked, estimated): the build refuses if a legacy response rate is more than 5 points from the Account's platform rate. Expected: Kvaternik 19.0% (platform 21.4%), Mazalin 18.2% (19.0%), Optical ≈17.4% (17.5%).
 
 ## Steps

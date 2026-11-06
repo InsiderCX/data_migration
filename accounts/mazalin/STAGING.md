@@ -5,7 +5,7 @@ Plan: [`docs/plans/2026-11-06_kvaternik-mazalin-opticalexpress.md`](../../docs/p
 
 ## Before you start
 
-- Load file: `data/mazalin_full_v1.csv`, SHA-256 `47059c8b07c045b9e54119ddcf988db001a9b505a3d816d5ace2c9556e728657`. If the hash differs, compare the values before rejecting it (a lost final newline changes the hash).
+- Load file: `data/mazalin_full_v1.csv`, SHA-256 `1746b50ed83c3619f17d28d6a161805ec22e293b35bce039d807fffe2326d79e`. If the hash differs, compare the values before rejecting it (a lost final newline changes the hash).
 - **Append only, no linking** (decision 2): the load must not change any existing row. `linked_responses` is 0 by design.
 - Staging is used as it is. Responses that reached prod after the staging copy was made can be missing there.
 - Run every file as a whole, unless the step says "one query at a time".

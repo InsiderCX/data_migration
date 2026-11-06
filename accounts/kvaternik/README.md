@@ -8,7 +8,7 @@ Import of the first weeks of **Kvaternik** (EU, `insider-prod`) that the platfor
 | Load code | `KVATERNIK_LEGACY_V1` |
 | Account / Locations / Survey | 21 / 27 Kvaternik Kostanjevec, 28 Kvaternik Subiceva / 11 on EU prod. Scripts resolve them from Alchemer survey **90677816** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | Load file built and mock test passed 6 Nov 2026. Next: EU staging run ([`STAGING.md`](STAGING.md)) |
+| Status | **Loaded on EU staging 6 Nov 2026**, validated, export identical, rollback tested. Run log: [`runs/2026-11-06_staging.md`](runs/2026-11-06_staging.md). Next: ops package (step 4) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 
@@ -80,7 +80,7 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_joined_Kvaternik.csv data
 
 | | |
 |---|---|
-| Load file | `data/kvaternik_full_v1.csv`, SHA-256 `ab2fdf835eeb52d0ff616a9890cd6c3bed2abe6ab9c18a0116a8ad0d6fcb0aea` |
+| Load file | `data/kvaternik_full_v1.csv`, SHA-256 `be1e9022de0a4c077b59a4ad4c111276a881fcc7721d88d10a44b1ddedbbfb79` (6 Nov 2026, with `country_out`) |
 | Row kinds | 8,407 rows: 7,680 platform / 727 legacy_invite |
 | Platform rows | decided by the Visit Msg ids on prod (`data/db_visit_msg_ids_2026-11-06.csv`), not by `sent_at`: 6 platform rows have no `sent_at` |
 | Send date | all 727 on 21 Feb 2024 14:50 Zagreb (estimated); 0 sends had to be moved before their response |

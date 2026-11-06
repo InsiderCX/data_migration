@@ -48,6 +48,7 @@ CONFIG = dict(
     undelivered_per_mille=48,          # platform delivery 95.2 % (no empty status on legacy rows)
     yob_rule="file",
     raw_only_ids=(),
+    country_map={"HRV": "HRV", "IE": "IRL", "XK": "XXK", "RS": "SER", "SI": "SVN", "BA": "BIH"},  # codes in public.country
     platform_response_rate=19.0,
 )
 # ---------------------------------------------------------------- code (identical for every Account)
@@ -279,6 +280,12 @@ if LAYOUT == 2:
         col, lmap = CONFIG["location_column"], CONFIG["location_map"]
         assert d.loc[legacy, col].str.strip().isin(set(lmap)).all(), "legacy row with an unknown Location"
         out.loc[legacy, "location_name"] = d.loc[legacy, col].str.strip().map(lmap)
+    # country as the platform's 3-letter code (public.country); every value seen must be in CONFIG country_map
+    cc = d.loc[legacy, "country_code"].str.strip().str.upper()
+    cmap = CONFIG.get("country_map", {})
+    assert cc[cc != ""].isin(set(cmap)).all(), f"country values without a mapping {set(cc[cc != ''][~cc.isin(set(cmap))])}"
+    out["country_out"] = ""
+    out.loc[legacy, "country_out"] = cc.map(cmap).fillna("")
 out.to_csv(OUT, index=False)
 
 # summary (stdout): counts, then estimated sends per quarter

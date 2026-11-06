@@ -8,7 +8,7 @@ Import of the first months of **Poliklinika Mazalin** (EU, `insider-prod`) that 
 | Load code | `MAZALIN_LEGACY_V1` |
 | Account / Location / Survey | 24 / 31 / 13 on EU prod. Scripts resolve them from Alchemer survey **90553181** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | Load file built and mock test passed 6 Nov 2026. Next: EU staging run ([`STAGING.md`](STAGING.md)) |
+| Status | **Loaded on EU staging 6 Nov 2026**, validated, export identical, rollback tested. Run log: [`runs/2026-11-06_staging.md`](runs/2026-11-06_staging.md). Next: ops package (step 4) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 
@@ -78,7 +78,7 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_Joined_Mazalin.csv data/d
 
 | | |
 |---|---|
-| Load file | `data/mazalin_full_v1.csv`, SHA-256 `47059c8b07c045b9e54119ddcf988db001a9b505a3d816d5ace2c9556e728657` |
+| Load file | `data/mazalin_full_v1.csv`, SHA-256 `1746b50ed83c3619f17d28d6a161805ec22e293b35bce039d807fffe2326d79e` (6 Nov 2026, with `country_out`) |
 | Row kinds | 30,481 rows: 28,028 platform / 2,453 legacy_invite |
 | Platform rows | decided by the Visit Msg ids on prod (`data/db_visit_msg_ids_2026-11-06.csv`) |
 | Send date (estimated) | wave 1, 12 Feb 2024 15:00 Zagreb: 1,566 invites (visits before 1 Feb 2024); wave 2, 27 Mar 2024 16:40: 887. 0 sends had to be moved before their response |

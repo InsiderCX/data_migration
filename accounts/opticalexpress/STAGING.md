@@ -5,7 +5,7 @@ Plan: [`docs/plans/2026-11-06_kvaternik-mazalin-opticalexpress.md`](../../docs/p
 
 ## Before you start
 
-- Load file: `data/opticalexpress_full_v1.csv`, SHA-256 `c92691de52ba7335fbfa3b21c3f8c458ef054389de7412f89c364a7b53e4387d`. If the hash differs, compare the values before rejecting it (a lost final newline changes the hash).
+- Load file: `data/opticalexpress_full_v1.csv`, SHA-256 `9ade17860b16411f514b61c1b6fc8e796e5370b80cce808ad4c5d2a311099495`. If the hash differs, compare the values before rejecting it (a lost final newline changes the hash).
 - **Append only, no linking** (decision 2): the load must not change any existing row. `linked_responses` is 0 by design.
 - Staging is used as it is. Responses that reached prod after the staging copy was made can be missing there.
 - Run every file as a whole, unless the step says "one query at a time".

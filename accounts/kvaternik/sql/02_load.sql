@@ -73,7 +73,8 @@ SELECT row_no::int AS row_no,
        NULLIF(btrim(sort_ts::text), '')::timestamp          AS sort_ts,
        NULLIF(btrim(status_source::text), '')                AS status_source,
        NULLIF(btrim(language_out::text), '')                 AS language_out,
-       NULLIF(btrim(location_name::text), '')                AS location_name
+       NULLIF(btrim(location_name::text), '')                AS location_name,
+       NULLIF(btrim(country_out::text), '')                  AS country_out
 FROM public.stg_kvaternik_full;
 
 ALTER TABLE stg ADD COLUMN patient_id int, ADD COLUMN pv_id int, ADD COLUMN visit_msg_id uuid,
@@ -159,7 +160,7 @@ SELECT np.id, c.account_id, s.sid,
        NULLIF(btrim(s.raw_first_name), ''), NULLIF(btrim(s.raw_last_name), ''), coalesce(s.phone_clean, ''),
        CASE WHEN upper(btrim(s.raw_gender_code)) IN ('F','M') THEN upper(btrim(s.raw_gender_code)) END,
        CASE WHEN s.language_out ~ '^[A-Z]{2}$' THEN s.language_out END,
-       CASE upper(btrim(s.raw_country_code)) WHEN '' THEN NULL WHEN 'ROM' THEN 'ROU' ELSE left(upper(btrim(s.raw_country_code)), 3) END,
+       (SELECT co.code FROM public.country co WHERE co.code = s.country_out),
        s.derived_year_of_birth, NULLIF(btrim(s.raw_lead_source), '')
 FROM np JOIN stg s ON s.row_no = np.row_no CROSS JOIN cfg c;
 

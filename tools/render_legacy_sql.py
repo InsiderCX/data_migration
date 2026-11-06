@@ -59,13 +59,15 @@ NLOC = C.get("n_locations", 1)
 STG_COLS = (["row_no", "row_kind"] + [R(c) for c in RAW] +
             ["legacy_sguid", "link_sguid", "sguid_reused", "phone_clean", "est_visit_date", "est_sent_at", "est_status",
              "has_response", "procedure_out", "derived_year_of_birth", "sort_ts"] +
-            (["status_source", "language_out", "location_name"] if V2 else []))
+            (["status_source", "language_out", "location_name", "country_out"] if V2 else []))
 LOC = "s.loc_id" if V2 else "c.location_id"                   # Location of a legacy row
 LANG = "s.language_out" if V2 else "upper(btrim(s.raw_language_code))"
 STATUSES = "'DELIVERED','UNDELIVERABLE','EXPIRED','REJECTED','PENDING'" if V2 else "'DELIVERED','UNDELIVERABLE'"
 SMS_NAME = ("CASE s.est_status WHEN 'DELIVERED' THEN 'DELIVERED_TO_HANDSET' WHEN 'EXPIRED' THEN 'EXPIRED_EXPIRED'\n"
             "         WHEN 'REJECTED' THEN 'REJECTED_NETWORK' WHEN 'PENDING' THEN 'PENDING_ACCEPTED' ELSE 'UNDELIVERABLE_NOT_DELIVERED' END"
             if V2 else "CASE s.est_status WHEN 'DELIVERED' THEN 'DELIVERED_TO_HANDSET' ELSE 'UNDELIVERABLE_NOT_DELIVERED' END")
+COUNTRY = ("(SELECT co.code FROM public.country co WHERE co.code = s.country_out)" if V2 else
+           "CASE upper(btrim(s.raw_country_code)) WHEN '' THEN NULL WHEN 'ROM' THEN 'ROU' ELSE left(upper(btrim(s.raw_country_code)), 3) END")
 META = "hstore(ARRAY['send_algo', 'legacy_import', 'status_source', s.status_source])" if V2 else "hstore('send_algo', 'legacy_import')"
 
 # ------------------------------------------------------------------------------------------------ 01
@@ -182,7 +184,8 @@ WHERE sr."surveyId" = c.survey_id AND sr.visit_msg_id IS NULL AND sr.sguid = s.l
     "--    Ops decide; linking later = config change, rebuild, rerun.\n\n")
 V2_STG = "" if not V2 else (",\n       NULLIF(btrim(status_source::text), '')                AS status_source,"
                               "\n       NULLIF(btrim(language_out::text), '')                 AS language_out,"
-                              "\n       NULLIF(btrim(location_name::text), '')                AS location_name")
+                              "\n       NULLIF(btrim(location_name::text), '')                AS location_name,"
+                              "\n       NULLIF(btrim(country_out::text), '')                  AS country_out")
 LOC_SQL = "" if not V2 else (
     "\n-- Location of each legacy row, resolved by name (never by a hard-coded id)\n"
     "ALTER TABLE stg ADD COLUMN loc_id int;\n"
@@ -326,7 +329,7 @@ SELECT np.id, c.account_id, s.sid,
        NULLIF(btrim(s.raw_first_name), ''), NULLIF(btrim(s.raw_last_name), ''), coalesce(s.phone_clean, ''),
        CASE WHEN upper(btrim(s.raw_gender_code)) IN ('F','M') THEN upper(btrim(s.raw_gender_code)) END,
        CASE WHEN {LANG} ~ '^[A-Z]{{2}}$' THEN {LANG} END,
-       CASE upper(btrim(s.raw_country_code)) WHEN '' THEN NULL WHEN 'ROM' THEN 'ROU' ELSE left(upper(btrim(s.raw_country_code)), 3) END,
+       {COUNTRY},
        s.derived_year_of_birth, NULLIF(btrim(s.raw_lead_source), '')
 FROM np JOIN stg s ON s.row_no = np.row_no CROSS JOIN cfg c;
 

@@ -8,7 +8,7 @@ Import of the pre-platform history of **Optical Express** (EU, `insider-prod`): 
 | Load code | `OPTICALEXPRESS_LEGACY_V1` |
 | Account / Location / Survey | 44 / 79 / 25 on EU prod. Scripts resolve them from Alchemer survey **90535032** |
 | Owner | Ana (ana@insidercx.com) |
-| Status | Load file built and mock test passed 6 Nov 2026. Next: EU staging run ([`STAGING.md`](STAGING.md)) |
+| Status | **Loaded on EU staging 6 Nov 2026**, validated, export identical, rollback tested. Run log: [`runs/2026-11-06_staging.md`](runs/2026-11-06_staging.md). Next: ops package (step 4) |
 
 All numbers are **real**, read from the EU prod replica or the input files on 6 Nov 2026, unless marked estimated.
 
@@ -82,7 +82,7 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_joined_OpticalExpress.csv
 
 | | |
 |---|---|
-| Load file | `data/opticalexpress_full_v1.csv`, SHA-256 `c92691de52ba7335fbfa3b21c3f8c458ef054389de7412f89c364a7b53e4387d` |
+| Load file | `data/opticalexpress_full_v1.csv`, SHA-256 `9ade17860b16411f514b61c1b6fc8e796e5370b80cce808ad4c5d2a311099495` (6 Nov 2026, with `country_out`) |
 | Row kinds | 7,931 rows: 3,850 platform / 3,966 legacy_invite / 2 legacy_visit / 113 legacy_raw |
 | legacy_visit (2) | rows without a usable phone (fewer than 8 digits) and no response: not an SMS invite (decision 15 of DEV-162) |
 | legacy_raw (113) | the 56 repeated ids (decision 7): stored as source rows only, for the export back and for ops (O2) |
@@ -90,6 +90,7 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_joined_OpticalExpress.csv
 | Visit date | file 690, estimated 3,278 (3,271 without a date + 7 whose file date is after the estimated send) |
 | Status | file 2,613 (real), **corrected 21** (answered), from the response 254 (empty status, answered), estimated 1,078 (empty status, 88.2%). Result: DELIVERED 3,649, UNDELIVERABLE 212, REJECTED 94, EXPIRED 7, PENDING 4 |
 | Language | SLO → SL (template 113), HR → HR (112) |
+| Country | Croatian names → platform codes: SLOVENIJA → SVN, HRVATSKA → HRV, ŠVICARSKA → CHE, CRNA GORA → MNE, NIZOZEMSKA → NLD, KOSOVO → XXK, BIH, NJEMAČKA → DEU, AUSTRIJA → AUT (plan decision 13) |
 | Responses | 634 real responses on legacy invites, **not linked** (decision 2). If linked: 17.4% (platform 17.5%), estimated |
 | Note | one legacy invite is a test row (text id, its only response is Deleted); kept as in the file, listed for ops |
 | Original columns | `raw_*`, byte-identical; the export back (`04`) equals the clinic file (mock test) |

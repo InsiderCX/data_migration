@@ -5,7 +5,7 @@ Plan: [`docs/plans/2026-11-06_kvaternik-mazalin-opticalexpress.md`](../../docs/p
 
 ## Before you start
 
-- Load file: `data/kvaternik_full_v1.csv`, SHA-256 `ab2fdf835eeb52d0ff616a9890cd6c3bed2abe6ab9c18a0116a8ad0d6fcb0aea`. If the hash differs, compare the values before rejecting it (a lost final newline changes the hash).
+- Load file: `data/kvaternik_full_v1.csv`, SHA-256 `be1e9022de0a4c077b59a4ad4c111276a881fcc7721d88d10a44b1ddedbbfb79`. If the hash differs, compare the values before rejecting it (a lost final newline changes the hash).
 - **Append only, no linking** (decision 2): the load must not change any existing row. `linked_responses` is 0 by design.
 - Staging is used as it is. Responses that reached prod after the staging copy was made can be missing there.
 - Run every file as a whole, unless the step says "one query at a time".

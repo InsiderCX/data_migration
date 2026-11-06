@@ -30,6 +30,7 @@ TPL = {"videntis": [(79, "HR"), (80, "EN"), (81, "FR"), (82, "DE"), (83, "IT")],
 TPL = [t + (1,) if len(t) == 2 else t for t in TPL]          # (id, language, mock Location id or None)
 # Locations as on EU prod (names matter: layout-2 loads resolve a row's Location by name)
 LOCS = {"kvaternik": ["Kvaternik Subiceva", "Kvaternik Kostanjevec"]}.get(C["slug"], [C["account_name"]])
+COUNTRIES = (pathlib.Path(__file__).parent / "country_codes.txt").read_text().split()   # public.country on EU prod, 6 Nov 2026
 q = lambda xs: ",".join("'" + str(x).replace("'", "''") + "'" for x in xs)
 
 legacy = f[f.row_kind.isin(["legacy_invite", "legacy_visit"])]
@@ -61,6 +62,9 @@ CREATE TABLE patient(id int GENERATED ALWAYS AS IDENTITY primary key, account_id
   phone varchar not null, source_id varchar, gender_code char, lead_source varchar, year_of_birth int, country_code char(3),
   language_code char(2), created timestamptz not null default now(), updated timestamptz not null default now());
 CREATE UNIQUE INDEX uq_source_id_per_account ON patient(account_id, source_id);
+CREATE TABLE country(code char(3) primary key);
+INSERT INTO country VALUES {", ".join(f"('{c}')" for c in COUNTRIES)};
+ALTER TABLE patient ADD CONSTRAINT fk_country_code FOREIGN KEY (country_code) REFERENCES country(code);
 CREATE TABLE patient_visit(id int GENERATED ALWAYS AS IDENTITY primary key, account_id int not null, location_id int not null,
   visit_date timestamptz not null, doctor varchar, procedure varchar, comment text, patient_id int not null references patient(id),
   created_at timestamptz not null default now());
