@@ -11,7 +11,7 @@ Follows `docs/playbook.md`, with Videntis (`accounts/videntis/`) as the template
 | 1 Discovery, plan, account cards | **done 6 Nov 2026** |
 | 2 Builder changes, load files, rendered SQL, mock tests | **done 6 Nov 2026**. Shared builder and renderer extended with opt-in options; Videntis, Arcadia and Apolonija rebuild byte-identical load files and SQL; mock test passes for all six Accounts |
 | 3 EU staging run per Account | **done 6 Nov 2026**, all three loaded and left for ops: Kvaternik batch 13097, Mazalin 13095, Optical Express 13099. Run logs in `accounts/<account>/runs/2026-11-06_staging.md`. Found and fixed on staging: country foreign key (decision 13) |
-| 4 Ops package (differences workbook, COPS checklist) | not started |
+| 4 Ops package (differences workbook, COPS checklist) | **ready 6 Nov 2026**, waiting for Ana to create the COPS ticket. Workbook `out/DEV-232_ops_review_2026-11-06.xlsx` (git-ignored, ids only), built by `tools/dev232/build_ops_workbook.py`; ticket text `out/dev232/COPS_ticket_DEV-232.txt` |
 
 ## How we work
 
@@ -79,6 +79,14 @@ Inputs are in `accounts/<account>/data/` (git-ignored, PII). SHA-256:
 | 4 | Ops package: differences workbook (prod replica vs Zoho vs Alchemer by response id; "today" vs "if linked"), checklist for a new COPS ticket | Claude | ~0.5 day + Zoho waits |
 
 All estimates.
+
+## Comparison: staging vs Zoho vs Alchemer (6 Nov 2026, real numbers)
+
+- **Alchemer = source of truth.** Complete / Partial before the platform start: Kvaternik 112 / 20, Mazalin 309 / 130, Optical 539 / 133, identical on staging and prod. Before 1 Sep 2026 identical too, except Mazalin: staging lacks 7 responses of 9 Jul 2026 (reached prod after the staging copy) and 1 response (submitted 16-20 Dec 2024) is Complete in Alchemer but Partial in our DB (B1, platform era).
+- **Zoho vs staging, legacy months, by response id:** all 30 months identical once the legacy responses are counted as linked. No Zoho response missing from staging. Responses only on staging: Deleted, test, no sguid, and Optical's 32 missing invites (A3).
+- **Zoho vs staging, platform months, by count:** every difference = responses without an invite (B2) or newer than the staging copy (Sep 2026 on).
+- Zoho sources: Poliklinika Kvaternik / `JOINED_FINAL`, Poliklinika Mazalin / `Joined`, Optical Express / `Joined_final`. Inputs in `out/dev232/` (git-ignored).
+- Alchemer single responses opened (status only kept): Mazalin 1896, 1898, 1901, 1909, all Partial as in our DB. Stopped there: `get_response` returns full answers and IP addresses.
 
 ## Open items
 
