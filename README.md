@@ -2,7 +2,7 @@
 
 Bringing an Account's **pre-platform history** (survey invites sent outside InsiderCX, and the responses they got) into the InsiderCX database, so Clinicdash shows it like any other period, ops can validate it, and the clinic's original file can be exported back unchanged.
 
-The first Account done this way is **Stomatologija i estetika** (`accounts/sie/`). Videntis, Arcadia and Apolonija follow (plan: `docs/plans/2026-11-03_videntis-arcadia-apolonija.md`); they use a shared builder and generated SQL so several Accounts stay identical.
+The first Account done this way is **Stomatologija i estetika** (`accounts/sie/`). Videntis, Arcadia and Apolonija follow (plan: `docs/plans/2026-11-03_videntis-arcadia-apolonija.md`), then Kvaternik, Mazalin and Optical Express (plan: `docs/plans/2026-11-06_kvaternik-mazalin-opticalexpress.md`); they use a shared builder and generated SQL so several Accounts stay identical.
 
 ## Layout
 
@@ -43,6 +43,9 @@ accounts/
 | Videntis Dental Centar (`videntis`) | EU | `VIDENTIS_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13087), rollback tested | waiting for ops SQL | — · [DEV-162](https://linear.app/insidercx/issue/DEV-162/upload-the-legacy-data) |
 | Arcadia (`arcadia`) | EU | `ARCADIA_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13089), rollback tested | waiting for ops SQL | — · DEV-162 |
 | Stomatološka poliklinika Apolonija (`apolonija`) | EU | `APOLONIJA_LEGACY_V1` | **loaded 3 Nov 2026** (batch 13091), rollback tested (35 min) | waiting for ops SQL | — · DEV-162 |
+| Kvaternik (`kvaternik`) | EU | `KVATERNIK_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13097), rollback tested, append only (0 linked) | waiting for ops (COPS ticket, DEV-232) | after ops sign-off · [DEV-232](https://linear.app/insidercx/issue/DEV-232/upload-legacy-data-for-kvaternik-mazalin-and-opticalexpress-to-the-stg) |
+| Poliklinika Mazalin (`mazalin`) | EU | `MAZALIN_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13095), rollback tested, append only (0 linked) | waiting for ops (COPS ticket, DEV-232) | after ops sign-off · DEV-232 |
+| Optical Express (`opticalexpress`) | EU | `OPTICALEXPRESS_LEGACY_V1` | **loaded 6 Nov 2026** (batch 13099), rollback tested, append only (0 linked) | waiting for ops (COPS ticket, DEV-232) | after ops sign-off · DEV-232 |
 
 ## Ground rules (short version; full list in `CLAUDE.md`)
 
