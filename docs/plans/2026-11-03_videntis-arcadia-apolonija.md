@@ -40,10 +40,11 @@ Projected after the changes (real responses, projected totals): Apolonija Clinic
 - Apolonija +181: 44 survey link ids with a space or text (Zoho misses them), 136 dropped by Zoho's JOINED in Mar-Aug 2026, 1 newer than Zoho's refresh.
 - Kvaternik +3: response 146 is Deleted and Clinicdash counts Deleted responses (exists on prod today; the only one in the six Accounts; dev ticket), 2 newer than Zoho's refresh. Mazalin +6: newer than Zoho's refresh.
 - Arcadia: Zoho's table lists the 93 reused-id responses twice. If its charts count rows, Zoho shows up to 94 more than Clinicdash; Ana checks Aug 2023 by hand (116 = rows, 73 = responses).
+- Checked by hand 17 Nov 2026 (Ana): Zoho matches the workbook for all six Accounts; Clinicdash staging General dashboard Arcadia Aug 2023 = 73 / NPS 91.8 as projected. Zoho Pages embedded in Clinicdash show Zoho's numbers (116), not ours. Decisions: Zoho is not changed; legacy months get no Comment Sentiment (not run on legacy comments).
 - Clinicdash (InsiderCX code): months in the Clinicdash User's time zone; NPS Trends joins Visit Msg and Patient Visit by the Visit Msg's Account. Checked on staging: every linked legacy response has both, in the right Account.
 
 **Open, in order:**
-1. Staging reruns with the new load files: Apolonija (rollback 13091, load again) and Arcadia (rollback 13089, load again). Claude may run them with `tools/run_staging.sh` after Ana's go.
+1. ~~Staging reruns~~ **done 17 Nov 2026**: Arcadia batch 13101 (1,072 linked), Apolonija batch 13103 (1,515 linked); both validated, exports identical, run files `accounts/<account>/runs/2026-11-17_staging.md`.
 2. Sync with Karlo: tell him how A1 was decided; ask for the written C1 line per Account.
 3. DEV-232 (later, own branch): apply Karlo's COPS-234 answers of 9 Nov (link where there is visit data, Optical repeated ids per his marked file, discard the 32 Optical responses without an invite). Needs his marked file.
 4. Items 4–7 of the 4 Nov list below are unchanged (faster `99_rollback.sql` and `PRODUCTION.md`; dev ticket for Arcadia 2267 and Alchemer deletions, now covering Karlo's "not shown anywhere"; C04–C06 with the clinic; drop staging tables after sign-off).

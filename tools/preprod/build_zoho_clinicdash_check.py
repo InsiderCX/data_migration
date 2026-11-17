@@ -75,8 +75,9 @@ for t in [
     "all-time total, one legacy month, September 2026.",
     "Goal: a clinic must see the same numbers in Clinicdash as in Zoho. Every difference has a reason and a count; "
     "'unexplained' must be zero before production.",
-    "Zoho (real): the Account's Joined query table behind its monthly charts, by 'Time Started'. 'Rows' is what a chart "
-    "that counts rows shows; 'distinct' counts each Alchemer response once. Which of the two the charts use is confirmed by hand (sheet Spot checks).",
+    "Zoho (real): the Account's Joined query table behind its monthly charts, by 'Time Started'. Zoho's charts count "
+    "table ROWS (confirmed by hand 17 Nov 2026: Arcadia Aug 2023 shows 116 responses, NPS 91.4 = its 116 rows), so a "
+    "response joined to two clinic rows is counted twice. Zoho counts only rows with a score (confirmed by hand: Videntis Nov 2022 shows 45, not 46), like Clinicdash. Some Zoho dashboards show NPS with 2 decimals (77.78), Clinicdash with 1 (77.8).",
     "Clinicdash today (real): prod replica on 17 Nov 2026. Clinicdash after the load (projected): today + the legacy "
     "responses the load links (real responses, the link is what the load adds).",
     "Clinicdash rules (InsiderCX code, General dashboard): responses with a Visit Msg and a score 0-10, dated by "
@@ -84,6 +85,8 @@ for t in [
     "% promoters (9-10) - % detractors (0-6), half up to 1 decimal. NPS Trends shows one line per Location (no Account total).",
     "Kvaternik, Mazalin, Optical Express: loaded append-only on staging. 'After the load' links their legacy responses "
     "as Karlo decided in COPS-234 (A1); 'today' columns show what staging has now (legacy months 0).",
+    "Decision 17 Nov 2026 (Ana): Zoho is not changed. Its differences stay as known differences with the reasons in column Why.",
+    "Decision 17 Nov 2026 (Ana): legacy months show no Comment Sentiment in Clinicdash (sentiment is not run on legacy comments). Zoho Pages embedded in Clinicdash show Zoho's numbers, not Clinicdash's.",
     "Not compared (not comparable): sends, delivery and response rate (legacy ones are estimated), breakdowns that exist only in Zoho.",
     "Contains Alchemer response ids only, no patient data. Git-ignored.",
 ]:
@@ -92,22 +95,55 @@ rm.column_dimensions["A"].width = 140
 for c in rm["A"]:
     c.font, c.alignment = Font(name=F), Alignment(wrap_text=True, vertical="top")
 
-ws = wb.create_sheet("Checkpoints")
-H = ["Account", "Checkpoint", "Zoho rows (real)", "Zoho distinct responses (real)", "Zoho distinct with score",
-     "Zoho promoters", "Zoho detractors", "Zoho NPS (distinct)", "Clinicdash today on prod (real)",
+def pct(k, n):  # Clinicdash and Zoho both show one decimal, half up
+    return "" if not n else math.floor(1000 * k / n + 0.5) / 10
+
+
+sm = wb.create_sheet("Zoho vs Clinicdash")
+sm.append(["Account", "Period", "Zoho now: responses", "Zoho now: NPS", "Zoho now: promoters %", "Zoho now: passives %",
+           "Zoho now: detractors %", "Clinicdash after load: responses", "Clinicdash: NPS", "Clinicdash: promoters %",
+           "Clinicdash: passives %", "Clinicdash: detractors %", "Difference: responses", "Difference: NPS", "Why"])
+for a, name, alch, dev232 in ACC:
+    for cp in [k[1] for k in zoho if k[0] == a]:
+        z = zoho[(a, cp)]
+        zr = zs = int(z["r_scored"]); zp, zd = int(z["r_prom"]), int(z["r_det"])  # Zoho counts rows with a score
+        today, added = clinicdash(alch, a, cp, False)[0], clinicdash(alch, a, cp, True)[1]
+        n, p, d = today[0] + added[0], today[1] + added[1], today[3] + added[2]
+        w = why.get((a, cp), {})
+        sm.append([name, "All time" if cp == "total" else f"{cp[:4]}-{cp[4:]}", zr, nps(zp, zd, zs), pct(zp, zs),
+                   pct(zs - zp - zd, zs), pct(zd, zs), n, nps(p, d, n), pct(p, n), pct(n - p - d, n), pct(d, n),
+                   n - zr, round(nps(p, d, n) - nps(zp, zd, zs), 1), w.get("short", "")])
+for c in sm[1]:
+    c.fill, c.font, c.border, c.alignment = HDR, HF, BOX, Alignment(wrap_text=True, vertical="center")
+for row in sm.iter_rows(min_row=2):
+    same = row[12].value == 0 and row[13].value == 0
+    for c in row:
+        c.font, c.border, c.alignment = Font(name=F), BOX, Alignment(wrap_text=True, vertical="top")
+    for c in row[12:15]:
+        c.fill = FILL["match" if same else "known"]
+for i, wdt in enumerate([15, 10, 10, 8, 10, 10, 10, 11, 9, 10, 10, 10, 11, 10, 70], 1):
+    sm.column_dimensions[get_column_letter(i)].width = wdt
+sm.freeze_panes = "C2"
+
+ws = wb.create_sheet("Detail")
+# Zoho "as shown": its charts count table rows (confirmed by hand on Arcadia Aug 2023: 116 rows, NPS 91.4)
+H = ["Account", "Checkpoint", "Zoho as shown: responses (rows with a score, real)", "Zoho as shown: promoters", "Zoho as shown: detractors",
+     "Zoho as shown: NPS", "Zoho distinct responses with a score (real)", "Clinicdash today on prod (real)",
      "Added by the load (scored responses, real)", "Clinicdash after load: responses (projected)", "promoters", "passives",
-     "detractors", "NPS", "After load minus Zoho distinct with score", "Result", "Reason", "Check by hand"]
+     "detractors", "NPS", "Responses: Clinicdash minus Zoho as shown", "NPS: Clinicdash minus Zoho as shown", "Result",
+     "Reason", "Check by hand"]
 ws.append(H)
 for a, name, alch, dev232 in ACC:
     for cp in [k[1] for k in zoho if k[0] == a]:
         z = zoho[(a, cp)]
-        zn, zp, zd = int(z["d_scored"]), int(z["d_prom"]), int(z["d_det"])
+        zr = zs = int(z["r_scored"]); zp, zd = int(z["r_prom"]), int(z["r_det"])  # Zoho counts rows with a score
         today, added = clinicdash(alch, a, cp, False)[0], clinicdash(alch, a, cp, True)[1]
         n, p, d = today[0] + added[0], today[1] + added[1], today[3] + added[2]
         w = why.get((a, cp), {})
         label = "Total, all time" if cp == "total" else f"{cp[:4]}-{cp[4:]}"
-        ws.append([name, label, int(z["rows"]), int(z["distinct"]), zn, zp, zd, nps(zp, zd, zn), today[0], added[0],
-                   n, p, n - p - d, d, nps(p, d, n), n - zn, w.get("result", ""), w.get("reason", ""), w.get("manual", "")])
+        ws.append([name, label, zr, zp, zd, nps(zp, zd, zs), int(z["d_scored"]), today[0], added[0], n, p, n - p - d, d,
+                   nps(p, d, n), n - zr, round(nps(p, d, n) - nps(zp, zd, zs), 1), w.get("result", ""),
+                   w.get("reason", ""), w.get("manual", "")])
 for c in ws[1]:
     c.fill, c.font, c.border, c.alignment = HDR, HF, BOX, Alignment(wrap_text=True, vertical="center")
 for row in ws.iter_rows(min_row=2):
@@ -115,9 +151,9 @@ for row in ws.iter_rows(min_row=2):
         c.font, c.border, c.alignment = Font(name=F), BOX, Alignment(wrap_text=True, vertical="top")
     res = row[16].value
     if res in FILL:
-        for c in row[15:18]:
+        for c in row[14:18]:
             c.fill = FILL[res]
-for i, wdt in enumerate([14, 14, 9, 10, 10, 9, 9, 9, 11, 11, 12, 9, 9, 9, 8, 12, 12, 60, 45], 1):
+for i, wdt in enumerate([14, 14, 11, 9, 9, 8, 11, 11, 11, 12, 9, 9, 9, 8, 12, 10, 11, 60, 45], 1):
     ws.column_dimensions[get_column_letter(i)].width = wdt
 ws.freeze_panes = "C2"
 
