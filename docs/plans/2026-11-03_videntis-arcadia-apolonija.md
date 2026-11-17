@@ -36,6 +36,12 @@ Branch `fix/DEV-184-exclude-alchemer-deleted-responses` (from `main`; the DEV-18
 
 Projected after the changes (real responses, projected totals): Apolonija Clinicdash after load 2,652 (was 2,654); legacy NPS still 83.6 (127 and 300 were both promoters). Arcadia adds 1,072 legacy responses (was 979), so the gap to Zoho closes by the 93 reused-id responses.
 
+**Zoho vs Clinicdash before production (17 Nov 2026).** Six Accounts, three checkpoints each (all-time total, one legacy month, Sep 2026): 13 match exactly, 5 differ with a named reason, 0 unexplained. Workbook `out/preprod/Zoho_vs_Clinicdash_2026-11-17.xlsx` (git-ignored), built by `tools/preprod/build_zoho_clinicdash_check.py`. Zoho = the Account's Joined table (real); Clinicdash after the load = prod today (real) + the responses the load links (projected).
+- Apolonija +181: 44 survey link ids with a space or text (Zoho misses them), 136 dropped by Zoho's JOINED in Mar-Aug 2026, 1 newer than Zoho's refresh.
+- Kvaternik +3: response 146 is Deleted and Clinicdash counts Deleted responses (exists on prod today; the only one in the six Accounts; dev ticket), 2 newer than Zoho's refresh. Mazalin +6: newer than Zoho's refresh.
+- Arcadia: Zoho's table lists the 93 reused-id responses twice. If its charts count rows, Zoho shows up to 94 more than Clinicdash; Ana checks Aug 2023 by hand (116 = rows, 73 = responses).
+- Clinicdash (InsiderCX code): months in the Clinicdash User's time zone; NPS Trends joins Visit Msg and Patient Visit by the Visit Msg's Account. Checked on staging: every linked legacy response has both, in the right Account.
+
 **Open, in order:**
 1. Staging reruns with the new load files: Apolonija (rollback 13091, load again) and Arcadia (rollback 13089, load again). Claude may run them with `tools/run_staging.sh` after Ana's go.
 2. Sync with Karlo: tell him how A1 was decided; ask for the written C1 line per Account.
