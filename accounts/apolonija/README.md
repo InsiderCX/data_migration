@@ -93,9 +93,9 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_JOINED_Apolonija.csv data
 
 | | |
 |---|---|
-| Load file | `data/apolonija_full_v1.csv`, SHA-256 `800c54df6452f30261edf79d8b8bfdb27ec0c6aba113aab01f43a2b625f8e8ef` |
+| Load file | `data/apolonija_full_v1.csv`, SHA-256 `b4781a162ca29fadf639c6243574fb6a0f1184a4746823badf785bc174feeaf5` (17 Nov 2026, without Alchemer-Deleted 127 and 300) |
 | Row kinds | 67,895 rows: 25,576 legacy_raw / 20,383 legacy_visit / 11,420 platform / 10,516 legacy_invite |
-| Responses linked (real) | 1,517 (1,476 + 45 trimmed/`apo` sguids − 4 Deleted) |
+| Responses linked (real) | 1,515 (1,476 + 45 trimmed/`apo` sguids − 6 Deleted: 4 in the DB, 2 only in Alchemer, responses 127 and 300, COPS-224 A3) |
 | Original columns | `raw_*`, values identical; 157 lines differ only in quoting |
 | Year of birth | empty (decision 4) |
 
@@ -105,7 +105,7 @@ Responses come from the prod replica (`data/db_unlinked_responses_2026-11-03.csv
 
 | Period | Sent (est.) | Delivered (est.) | Responses (real) | Response rate (est.) | Platform delivery / response rate (real) |
 |---|---|---|---|---|---|
-| 16 Nov 2022 – 18 Oct 2024 | 10,516 | 10,127 (96.3%) | 1,517 | 15.0% | 96.1% / 10.3% |
+| 16 Nov 2022 – 18 Oct 2024 | 10,516 | 10,127 (96.3%) | 1,515 | 15.0% | 96.1% / 10.3% |
 
 - Invite replay on platform data: recall 89.8% (+4.2%) without an age rule. The platform does not apply its limit 25 either: 5,810 real invites went to Patients under 25. Passes decision 7 (≥ 85%).
 - Legacy rows without a phone are invites only when a real response proves it (decision 15).

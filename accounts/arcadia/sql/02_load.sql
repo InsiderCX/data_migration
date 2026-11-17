@@ -1,8 +1,8 @@
 -- Arcadia legacy import (ARCADIA_LEGACY_V1). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.
 -- Part 2: the load. Requires 01_before_import.sql, and arcadia_full_v1.csv imported into public.stg_arcadia_full (all columns TEXT).
--- Creates: Patients that don't exist yet (existing Patients are never changed); 7098 legacy Patient Visits
--- (never surveyed); 1 mock sending batch with 5255 legacy invites; links 979 legacy Survey Responses;
--- stores all 13595 source rows untouched in legacy_source_row. Platform rows (6497) are only linked, never created.
+-- Creates: Patients that don't exist yet (existing Patients are never changed); 6809 legacy Patient Visits
+-- (never surveyed); 1 mock sending batch with 5097 legacy invites; links 1072 legacy Survey Responses;
+-- stores all 13306 source rows untouched in legacy_source_row. Platform rows (6497) are only linked, never created.
 -- Run the WHOLE file. Check the GUI's commit mode first. On any error: run ROLLBACK; and send the message.
 
 BEGIN;
@@ -78,10 +78,10 @@ UPDATE stg SET sid = NULLIF(btrim(raw_source_id), ''), is_legacy = row_kind IN (
 
 -- 2) Prep checks ---------------------------------------------------------------------------------------------------
 DO $$ DECLARE n int; BEGIN
-  SELECT count(*) INTO n FROM stg;                                  IF n <> 13595 THEN RAISE EXCEPTION 'rows %, expected 13595', n; END IF;
+  SELECT count(*) INTO n FROM stg;                                  IF n <> 13306 THEN RAISE EXCEPTION 'rows %, expected 13306', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'platform';      IF n <> 6497 THEN RAISE EXCEPTION 'platform rows %, expected 6497', n; END IF;
-  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite'; IF n <> 5255 THEN RAISE EXCEPTION 'legacy_invite rows %, expected 5255', n; END IF;
-  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_visit';  IF n <> 1843 THEN RAISE EXCEPTION 'legacy_visit rows %, expected 1843', n; END IF;
+  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite'; IF n <> 5097 THEN RAISE EXCEPTION 'legacy_invite rows %, expected 5097', n; END IF;
+  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_visit';  IF n <> 1712 THEN RAISE EXCEPTION 'legacy_visit rows %, expected 1712', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_raw';    IF n <> 0 THEN RAISE EXCEPTION 'legacy_raw rows %, expected 0', n; END IF;
   SELECT count(*) INTO n FROM (SELECT row_no FROM stg GROUP BY 1 HAVING count(*) > 1) d; IF n > 0 THEN RAISE EXCEPTION 'duplicate row_no %', n; END IF;
   -- raw columns must arrive as text exactly as in the file (an auto-typed date or number column would change them)
@@ -91,7 +91,7 @@ DO $$ DECLARE n int; BEGIN
     IF n > 0 THEN RAISE EXCEPTION 'raw_phone was converted to a number (% rows) - re-import with ALL columns as TEXT', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE is_legacy AND (est_visit_date IS NULL OR legacy_sguid IS NULL);
     IF n > 0 THEN RAISE EXCEPTION 'incomplete legacy rows %', n; END IF;
-  SELECT count(*) INTO n FROM stg WHERE is_legacy AND phone_clean IS NULL; IF n <> 152 THEN RAISE EXCEPTION 'legacy rows without phone %, expected 152', n; END IF;
+  SELECT count(*) INTO n FROM stg WHERE is_legacy AND phone_clean IS NULL; IF n <> 76 THEN RAISE EXCEPTION 'legacy rows without phone %, expected 76', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite' AND (est_sent_at IS NULL OR est_status NOT IN ('DELIVERED','UNDELIVERABLE'));
     IF n > 0 THEN RAISE EXCEPTION 'incomplete invite rows %', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite' AND NOT has_response
@@ -102,7 +102,7 @@ DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg s JOIN public.survey_response sr
      ON sr."surveyId" = (SELECT survey_id FROM cfg) AND sr.sguid = s.link_sguid AND sr.visit_msg_id IS NULL
      WHERE s.has_response;
-    IF n <> 979 THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected 979 (staging older than prod?)', n; END IF;
+    IF n <> 1072 THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected 1072 (staging older than prod?)', n; END IF;
 END $$;
 
 UPDATE stg SET visit_msg_id = uuid_generate_v5('8d2e5a7c-6b13-4f0e-a2c4-1e9d3b7f5c02'::uuid, 'arcadia-legacy-' || row_no) WHERE row_kind = 'legacy_invite';
@@ -254,17 +254,17 @@ FROM stg s CROSS JOIN cfg c;
 -- 10) Post-load checks (abort everything on mismatch) -----------------------------------------------------------------
 DO $$ DECLARE n int; c record; b int; BEGIN
   SELECT * INTO c FROM cfg; SELECT batch_id INTO b FROM sb;
-  SELECT count(*) INTO n FROM public.visit_msg WHERE sending_batch_id = b;   IF n <> 5255 THEN RAISE EXCEPTION 'visit_msg %', n; END IF;
+  SELECT count(*) INTO n FROM public.visit_msg WHERE sending_batch_id = b;   IF n <> 5097 THEN RAISE EXCEPTION 'visit_msg %', n; END IF;
   SELECT count(*) INTO n FROM public.patient_visit WHERE id IN (SELECT pv_id FROM stg WHERE is_legacy);
-    IF n <> 7098 THEN RAISE EXCEPTION 'patient_visit %', n; END IF;
+    IF n <> 6809 THEN RAISE EXCEPTION 'patient_visit %', n; END IF;
   SELECT count(*) INTO n FROM public.patient_visit_param WHERE patient_visit_id IN (SELECT pv_id FROM stg WHERE is_legacy);
-    IF n <> 7098 THEN RAISE EXCEPTION 'params %', n; END IF;
+    IF n <> 6809 THEN RAISE EXCEPTION 'params %', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
-    WHERE vm.sending_batch_id = b;                                           IF n <> 979 THEN RAISE EXCEPTION 'linked responses %, expected 979', n; END IF;
+    WHERE vm.sending_batch_id = b;                                           IF n <> 1072 THEN RAISE EXCEPTION 'linked responses %, expected 1072', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
     WHERE vm.sending_batch_id = b AND sr.status = 'Deleted';                 IF n > 0 THEN RAISE EXCEPTION 'Deleted responses linked %', n; END IF;
   SELECT count(*) INTO n FROM public.legacy_source_row WHERE account_id = c.account_id AND source_file = c.source_file;
-    IF n <> 13595 THEN RAISE EXCEPTION 'source rows %', n; END IF;
+    IF n <> 13306 THEN RAISE EXCEPTION 'source rows %', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE is_legacy AND patient_id IS NULL;    IF n > 0 THEN RAISE EXCEPTION 'legacy rows without patient %', n; END IF;
   SELECT count(*) INTO n FROM public.patient WHERE account_id = c.account_id AND created < c.loaded_at AND updated >= c.loaded_at;
     IF n > 0 THEN RAISE EXCEPTION 'existing patients modified %', n; END IF;

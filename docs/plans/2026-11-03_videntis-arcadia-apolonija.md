@@ -15,6 +15,33 @@ Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 | 5 Ops validation (DEV-184) | **sent to ops 4 Nov 2026** as Linear [COPS-224](https://linear.app/insidercx/issue/COPS-224) (Karlo), with two workbooks. Waiting for answers. DEV-184 is done only when ops have validated the data |
 | 5–7 | not started |
 
+## Where we stopped (17 Nov 2026)
+
+Branch `fix/DEV-184-exclude-alchemer-deleted-responses` (from `main`; the DEV-184 branch was merged as PR #5 on 6 Nov 2026). Loads on staging are still the 3 Nov ones (Videntis 13087, Arcadia 13089, Apolonija 13091).
+
+**Karlo's answers in COPS-224 (16 Nov 2026):**
+
+| Item | Answer | Action |
+|---|---|---|
+| A1 Arcadia 93 reused ids | Wants a quick sync. Rule given: keep the detractor, else the one with a comment, discard the other. COPS-234 flowchart: no phone → discard, else keep only 1 copy | His rule picks between two responses, but each id has 1 response and 2 clinic rows; `status` and `sent_at` are empty on all 578 rows. **Ana decided (17 Nov):** keep one row per id, don't load the other (it stays in the clinic file). Kept: only row with a phone (20 answered, 56 unanswered); answered with two phones: row closest in time (73, estimated); else the first row (140). Linked 1,072 (was 979). Built, mock test, staging rerun pending. Tell Karlo at the sync |
+| A2 Apolonija 44 sguid space/text | Confirm | none |
+| A3 Apolonija 127, 300 | Should not count; no response Deleted in Alchemer should be shown anywhere | **Done in the load file (17 Nov):** both re-checked as Deleted in Alchemer; builder option `alchemer_deleted`; Apolonija links 1,515 (was 1,517). Staging rerun pending. "Anywhere" = dev ticket for all Accounts (resync deletions) |
+| A4 late answers 647, 1964, 1261 | Confirm | none |
+| A5 Videntis 3 unscored | Confirm | none |
+| A6 estimated sends and delivery | Confirm | none |
+| B1 Apolonija 136 Zoho join drop | Include them in Clinicdash | none: Clinicdash already shows them |
+| B2 Apolonija 2073 second answer | No | none (default) |
+| B3 Arcadia 2267 stored twice | Ok | dev ticket (below) |
+| C1 sign-off | Box ticked, no written "Legacy data OK for production" per Account | **Open:** ask Karlo for the written line per Account |
+
+Projected after the changes (real responses, projected totals): Apolonija Clinicdash after load 2,652 (was 2,654); legacy NPS still 83.6 (127 and 300 were both promoters). Arcadia adds 1,072 legacy responses (was 979), so the gap to Zoho closes by the 93 reused-id responses.
+
+**Open, in order:**
+1. Staging reruns with the new load files: Apolonija (rollback 13091, load again) and Arcadia (rollback 13089, load again). Claude may run them with `tools/run_staging.sh` after Ana's go.
+2. Sync with Karlo: tell him how A1 was decided; ask for the written C1 line per Account.
+3. DEV-232 (later, own branch): apply Karlo's COPS-234 answers of 9 Nov (link where there is visit data, Optical repeated ids per his marked file, discard the 32 Optical responses without an invite). Needs his marked file.
+4. Items 4–7 of the 4 Nov list below are unchanged (faster `99_rollback.sql` and `PRODUCTION.md`; dev ticket for Arcadia 2267 and Alchemer deletions, now covering Karlo's "not shown anywhere"; C04–C06 with the clinic; drop staging tables after sign-off).
+
 ## Where we stopped (4 Nov 2026, end of day)
 
 Branch `feat/DEV-184-validate-legacy-data-staging` (pushed, no PR yet). DEV-162 work is merged (PRs #2, #3). Staging password rotated 4 Nov 2026; connection verified read-only. Loads still on staging: Videntis 13087, Arcadia 13089, Apolonija 13091.

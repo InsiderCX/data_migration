@@ -46,11 +46,11 @@ Without a decision, these 93 responses stay unlinked. Both Patient rows are stil
 | Group | Count | Linkable? |
 |---|---|---|
 | Numeric sguid, id on exactly one clinic row | **979** | yes |
-| Numeric sguid, id on two clinic rows (reused) | 93 | open item A1 |
+| Numeric sguid, id on two clinic rows (reused) | 93 | yes, to the kept row (A1, decided 17 Nov 2026) |
 | Numeric sguid, id not in the clinic file (`102`, two test-like) | 3 | no |
 | Empty sguid (one dated 1 Jan 1970) | 15 | no |
 | Test sguid | 2 | no |
-| **Total** | **1,092** | **979 (+ up to 93)** |
+| **Total** | **1,092** | **1,072** |
 
 ## 5. Platform benchmarks (initial invites sent 24 Apr 2025 – 3 Nov 2026)
 
@@ -82,7 +82,7 @@ Legacy id vs response start, all 1,072 responded legacy rows: **0.992, passes.**
 
 | # | Item | Who |
 |---|---|---|
-| A1 | 289 reused ids, 93 responses on them: which Patient each response belongs to | Ana decides (possibly the clinic knows the second scheme) |
+| A1 | 289 reused ids, 93 responses on them: which Patient each response belongs to | **Decided 17 Nov 2026** (Ana, after COPS-224): one row per id is kept, the other is not loaded. See step 2 |
 | A2 | Send dates for non-responded rows in the weak `10…` groups (Jun 2023 onward) | Decide in step 2 |
 
 ## Step 2: load file (built 3 Nov 2026)
@@ -93,9 +93,9 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_Joined_Arcadia.csv data/d
 
 | | |
 |---|---|
-| Load file | `data/arcadia_full_v1.csv`, SHA-256 `27c75d5da82a9132ba6758003859d4744da1515c96cf56227552651e757fa44b` |
-| Row kinds | 13,595 rows: 6,497 platform / 5,255 legacy_invite / 1,843 legacy_visit |
-| Responses linked (real) | 979 (the 93 on reused ids stay unlinked, decision 13) |
+| Load file | `data/arcadia_full_v1.csv`, SHA-256 `3e913556433cd525e1fbf099153380c721290384024d021305de861b524edf01` (17 Nov 2026, reused ids: one row kept) |
+| Row kinds | 13,306 rows: 6,497 platform / 5,097 legacy_invite / 1,712 legacy_visit. 289 clinic rows not loaded (below) |
+| Responses linked (real) | 1,072 (979 on unique ids + 93 on reused ids, linked to the kept row) |
 | Original columns | `raw_*`, values identical; 101 lines differ only in quoting |
 | Year of birth | the file's real `year_of_birth` (7,085 rows) |
 
@@ -105,10 +105,15 @@ Responses come from the prod replica (`data/db_unlinked_responses_2026-11-03.csv
 
 | Period | Sent (est.) | Delivered (est.) | Responses (real) | Response rate (est.) | Platform delivery / response rate (real) |
 |---|---|---|---|---|---|
-| 29 Jun 2023 – 4 Feb 2025 | 5,255 | 4,761 (90.5%) | 979 | 20.6% | 88.2% / 22.0% |
+| 29 Jun 2023 – 4 Feb 2025 | 5,097 | 4,618 (90.6%) | 1,072 | 23.2% | 88.2% / 22.0% |
 
 - Invite replay on platform data: recall 89.4% (−4.1%) with the age rule 18. Passes decision 7 (≥ 85%).
 - Legacy rows without a phone are invites only when a real response proves it (decision 15).
 - Median estimated invites per send day: 10 (busiest 83).
-- The 578 rows on reused ids are flagged `sguid_reused`: they can get an invite, but the sguid is never put in the link table.
+- Reused ids (289 ids, 578 rows; `reused_rule="pick"`, decision COPS-224 A1, Ana 17 Nov 2026): one row per id is kept and loaded like any other legacy row; the other row is **not loaded** and stays only in the clinic file. Its row number is in `data/arcadia_full_v1_discarded_rows.csv` (git-ignored, ids only). Which row is kept:
+  - answered id, only one row has a phone: that row (20, real: an SMS needs a phone)
+  - answered id, both rows have a phone: the row whose 10 nearest linked rows in file order have responses closest in time (73, **estimated**; ties go to the first row)
+  - unanswered id: the only row with a phone (56), else the first row in the file (140)
+- The export back (`04`) equals the clinic file **minus the 289 discarded rows**; the mock test checks exactly that.
+- Adding the 93 responses refits the send-date estimate: 193 other legacy rows got different estimated dates and 15 a different invite or status (estimates only, no real value changed).
 - Send-date method differs from SIE in two ways (check C10): dates are interpolated between isotonic block midpoints instead of steps, and id schemes with Spearman < 0.95 get the anchors' send-time quantiles by id rank. Weekend dates move to Monday.
