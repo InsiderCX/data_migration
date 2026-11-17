@@ -37,7 +37,7 @@ All files hold Patient PII and live in `data/` (git-ignored).
 
 | Group | Count | Linkable? |
 |---|---|---|
-| Numeric sguid = a legacy row id, not Deleted | **634** | yes, but **not linked now** (decision 2) |
+| Numeric sguid = a legacy row id, not Deleted | **634** | yes, **linked** (COPS-234 A1, 17 Nov 2026) |
 | Numeric or text sguid = a legacy id, Deleted | 4 (3 numeric + the one text id) | no (decision 8) |
 | Numeric sguid **missing from the clinic file** | 32 | no; open item O3 |
 | Other text / test sguid | 9 (4 Deleted) | no |
@@ -82,17 +82,18 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_joined_OpticalExpress.csv
 
 | | |
 |---|---|
-| Load file | `data/opticalexpress_full_v1.csv`, SHA-256 `9ade17860b16411f514b61c1b6fc8e796e5370b80cce808ad4c5d2a311099495` (6 Nov 2026, with `country_out`) |
-| Row kinds | 7,931 rows: 3,850 platform / 3,966 legacy_invite / 2 legacy_visit / 113 legacy_raw |
+| Load file | `data/opticalexpress_full_v1.csv`, SHA-256 `690a025bbd0dcfd20b7031531d23f097dabc21abf964b6dd02ff930f721e3de2` (17 Nov 2026: linked, repeated ids by the ops flowchart) |
+| Row kinds | 7,903 rows: 3,850 platform / 4,051 legacy_invite / 2 legacy_visit. 28 clinic rows not loaded (below) |
 | legacy_visit (2) | rows without a usable phone (fewer than 8 digits) and no response: not an SMS invite (decision 15 of DEV-162) |
-| legacy_raw (113) | the 56 repeated ids (decision 7): stored as source rows only, for the export back and for ops (O2) |
+| Repeated ids (56 ids, 113 rows) | ops flowchart (COPS-234 A2, `reused_rule="flowchart"`): a row without a phone or an SMS status is not loaded (28 rows; 6 ids lose both rows); no two rows are identical copies, so the other 85 are loaded as invites for different Patients. Not-loaded row numbers in `data/opticalexpress_full_v1_discarded_rows.csv` (git-ignored, ids only); the export back equals the clinic file minus those rows |
 | Send date (estimated) | isotonic per id scheme where the ids are time-ordered (the big schemes `len6:70`, `len6:80`, `len7:70`, Spearman 0.97–0.997 in discovery). Rank quantiles for weak schemes: 2-digit (−0.22), 3-digit (0.81), `len5:70` (0.28). Median date for 2 tiny schemes (7 rows, one of them a test id). **299 answered invites** had an estimate after their response and were moved to 2 min before it |
 | Visit date | file 690, estimated 3,278 (3,271 without a date + 7 whose file date is after the estimated send) |
 | Status | file 2,613 (real), **corrected 21** (answered), from the response 254 (empty status, answered), estimated 1,078 (empty status, 88.2%). Result: DELIVERED 3,649, UNDELIVERABLE 212, REJECTED 94, EXPIRED 7, PENDING 4 |
+| Status since 17 Nov 2026 | with the 85 repeated-id rows: file 2,698 (real), corrected 21, from the response 254, estimated 1,078. DELIVERED 3,732, UNDELIVERABLE 213, REJECTED 94, EXPIRED 7, PENDING 5 |
 | Language | SLO → SL (template 113), HR → HR (112) |
 | Country | Croatian names → platform codes: SLOVENIJA → SVN, HRVATSKA → HRV, ŠVICARSKA → CHE, CRNA GORA → MNE, NIZOZEMSKA → NLD, KOSOVO → XXK, BIH, NJEMAČKA → DEU, AUSTRIJA → AUT (plan decision 13) |
-| Responses | 634 real responses on legacy invites, **not linked** (decision 2). If linked: 17.4% (platform 17.5%), estimated |
+| Responses | 634 real responses on legacy invites, **linked** (COPS-234 A1, 17 Nov 2026). Response rate 17.0% (634 / 3,732 delivered, estimated; platform 17.5%) |
 | Note | one legacy invite is a test row (text id, its only response is Deleted); kept as in the file, listed for ops |
 | Original columns | `raw_*`, byte-identical; the export back (`04`) equals the clinic file (mock test) |
 
-SQL: `sql_config.json` (`layout` 2, `link_responses` false) rendered by `tools/render_legacy_sql.py`. Mock test: `bash tests/run_mock_test.sh data/Pacijenti_joined_OpticalExpress.csv` → ALL CHECKS PASSED (6 Nov 2026), including: no existing row changed, no `legacy_invite_map` rows, 0 responses linked even after a simulated Alchemer sync.
+SQL: `sql_config.json` (`layout` 2, `link_responses` true) rendered by `tools/render_legacy_sql.py`. Mock test: `bash tests/run_mock_test.sh data/Pacijenti_joined_OpticalExpress.csv` → ALL CHECKS PASSED (6 Nov 2026), including: no existing row changed, no `legacy_invite_map` rows, 0 responses linked even after a simulated Alchemer sync.

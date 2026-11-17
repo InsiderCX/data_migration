@@ -32,17 +32,16 @@
   "period": "Jun 2023 - 3 Mar 2025",
   "estimated": "send date (isotonic fit per id scheme, 16:00 Zagreb; fails the 0.95 id-order gate at 0.933), visit date where the file has none (send - 183 h), delivery status where the file has none and no response proves it (88.2% platform rate, status_source=estimated). REAL: SMS delivery status from the clinic file (status_source=file), except 21 answered rows corrected to DELIVERED (status_source=corrected)",
   "layout": 2,
-  "link_responses": false,
+  "link_responses": true,
   "expect": {
-    "rows": 7931,
+    "rows": 7903,
     "platform": 3850,
-    "legacy_invite": 3966,
+    "legacy_invite": 4051,
     "legacy_visit": 2,
-    "legacy_raw": 113,
-    "linked": 0,
-    "mapped_link": 0,
-    "reused_invites": 0,
-    "legacy_no_phone": 2,
-    "answered": 634
+    "legacy_raw": 0,
+    "linked": 634,
+    "mapped_link": 634,
+    "reused_invites": 70,
+    "legacy_no_phone": 2
   }
 }

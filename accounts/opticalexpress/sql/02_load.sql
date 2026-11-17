@@ -1,8 +1,8 @@
 -- Optical Express legacy import (OPTICALEXPRESS_LEGACY_V1). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.
 -- Part 2: the load. Requires 01_before_import.sql, and opticalexpress_full_v1.csv imported into public.stg_opticalexpress_full (all columns TEXT).
--- Creates: Patients that don't exist yet (existing Patients are never changed); 3968 legacy Patient Visits
--- (never surveyed); 1 mock sending batch with 3966 legacy invites; links NO Survey Responses (link_responses false: the 634 real responses stay as they are, no legacy_invite_map rows);
--- stores all 7931 source rows untouched in legacy_source_row. Platform rows (3850) are only linked, never created.
+-- Creates: Patients that don't exist yet (existing Patients are never changed); 4053 legacy Patient Visits
+-- (never surveyed); 1 mock sending batch with 4051 legacy invites; links 634 legacy Survey Responses;
+-- stores all 7903 source rows untouched in legacy_source_row. Platform rows (3850) are only linked, never created.
 -- Run the WHOLE file. Check the GUI's commit mode first. On any error: run ROLLBACK; and send the message.
 
 BEGIN;
@@ -87,11 +87,11 @@ WHERE s.is_legacy;
 
 -- 2) Prep checks ---------------------------------------------------------------------------------------------------
 DO $$ DECLARE n int; BEGIN
-  SELECT count(*) INTO n FROM stg;                                  IF n <> 7931 THEN RAISE EXCEPTION 'rows %, expected 7931', n; END IF;
+  SELECT count(*) INTO n FROM stg;                                  IF n <> 7903 THEN RAISE EXCEPTION 'rows %, expected 7903', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'platform';      IF n <> 3850 THEN RAISE EXCEPTION 'platform rows %, expected 3850', n; END IF;
-  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite'; IF n <> 3966 THEN RAISE EXCEPTION 'legacy_invite rows %, expected 3966', n; END IF;
+  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_invite'; IF n <> 4051 THEN RAISE EXCEPTION 'legacy_invite rows %, expected 4051', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_visit';  IF n <> 2 THEN RAISE EXCEPTION 'legacy_visit rows %, expected 2', n; END IF;
-  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_raw';    IF n <> 113 THEN RAISE EXCEPTION 'legacy_raw rows %, expected 113', n; END IF;
+  SELECT count(*) INTO n FROM stg WHERE row_kind = 'legacy_raw';    IF n <> 0 THEN RAISE EXCEPTION 'legacy_raw rows %, expected 0', n; END IF;
   SELECT count(*) INTO n FROM (SELECT row_no FROM stg GROUP BY 1 HAVING count(*) > 1) d; IF n > 0 THEN RAISE EXCEPTION 'duplicate row_no %', n; END IF;
   -- raw columns must arrive as text exactly as in the file (an auto-typed date or number column would change them)
   SELECT count(*) INTO n FROM stg WHERE row_kind = 'platform' AND raw_visit_date !~ '^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}$';
@@ -224,8 +224,19 @@ LEFT JOIN LATERAL (
   LIMIT 1) t ON true
 WHERE s.row_kind = 'legacy_invite';
 
--- 7) No linking (link_responses false, DEV-232 decision 2): no legacy_invite_map rows, Survey Responses untouched.
---    Ops decide; linking later = config change, rebuild, rerun.
+-- 7) Link table + link the responses ----------------------------------------------------------------------------------
+-- Key = the sguid exactly as Alchemer stores it (link_sguid) for answered invites, else the legacy id.
+-- Not mapped: reused ids (decision 13) and sguids whose response is Deleted (decision 12).
+INSERT INTO public.legacy_invite_map (account_id, legacy_sguid, visit_msg_id)
+SELECT c.account_id, coalesce(s.link_sguid, s.legacy_sguid), s.visit_msg_id
+FROM stg s CROSS JOIN cfg c
+WHERE s.row_kind = 'legacy_invite' AND NOT s.sguid_reused
+  AND NOT EXISTS (SELECT 1 FROM public.survey_response sr WHERE sr."surveyId" = c.survey_id AND sr.status = 'Deleted'
+                  AND btrim(sr.sguid) = s.legacy_sguid);
+
+UPDATE public.survey_response sr SET sguid = sr.sguid             -- fires the trigger, which fills visit_msg_id
+FROM stg s, cfg c
+WHERE sr."surveyId" = c.survey_id AND sr.visit_msg_id IS NULL AND sr.sguid = s.link_sguid AND s.has_response;
 
 -- 8) Platform rows: link to the existing invite / visit (nothing created) ----------------------------------------------
 UPDATE stg s SET visit_msg_id = vm.id, pv_id = vm.patient_visit_id
@@ -262,17 +273,17 @@ FROM stg s CROSS JOIN cfg c;
 -- 10) Post-load checks (abort everything on mismatch) -----------------------------------------------------------------
 DO $$ DECLARE n int; c record; b int; BEGIN
   SELECT * INTO c FROM cfg; SELECT batch_id INTO b FROM sb;
-  SELECT count(*) INTO n FROM public.visit_msg WHERE sending_batch_id = b;   IF n <> 3966 THEN RAISE EXCEPTION 'visit_msg %', n; END IF;
+  SELECT count(*) INTO n FROM public.visit_msg WHERE sending_batch_id = b;   IF n <> 4051 THEN RAISE EXCEPTION 'visit_msg %', n; END IF;
   SELECT count(*) INTO n FROM public.patient_visit WHERE id IN (SELECT pv_id FROM stg WHERE is_legacy);
-    IF n <> 3968 THEN RAISE EXCEPTION 'patient_visit %', n; END IF;
+    IF n <> 4053 THEN RAISE EXCEPTION 'patient_visit %', n; END IF;
   SELECT count(*) INTO n FROM public.patient_visit_param WHERE patient_visit_id IN (SELECT pv_id FROM stg WHERE is_legacy);
-    IF n <> 3968 THEN RAISE EXCEPTION 'params %', n; END IF;
+    IF n <> 4053 THEN RAISE EXCEPTION 'params %', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
-    WHERE vm.sending_batch_id = b;                                           IF n <> 0 THEN RAISE EXCEPTION 'linked responses %, expected 0', n; END IF;
+    WHERE vm.sending_batch_id = b;                                           IF n <> 634 THEN RAISE EXCEPTION 'linked responses %, expected 634', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
     WHERE vm.sending_batch_id = b AND sr.status = 'Deleted';                 IF n > 0 THEN RAISE EXCEPTION 'Deleted responses linked %', n; END IF;
   SELECT count(*) INTO n FROM public.legacy_source_row WHERE account_id = c.account_id AND source_file = c.source_file;
-    IF n <> 7931 THEN RAISE EXCEPTION 'source rows %', n; END IF;
+    IF n <> 7903 THEN RAISE EXCEPTION 'source rows %', n; END IF;
   SELECT count(*) INTO n FROM stg WHERE is_legacy AND patient_id IS NULL;    IF n > 0 THEN RAISE EXCEPTION 'legacy rows without patient %', n; END IF;
   SELECT count(*) INTO n FROM public.patient WHERE account_id = c.account_id AND created < c.loaded_at AND updated >= c.loaded_at;
     IF n > 0 THEN RAISE EXCEPTION 'existing patients modified %', n; END IF;

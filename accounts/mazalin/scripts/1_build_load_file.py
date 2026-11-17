@@ -14,7 +14,7 @@ Only the CONFIG block differs between Accounts; the code below it is identical (
 Method (SIE's, re-fitted per Account; every est_* value is ESTIMATED):
   1. Anchors: legacy rows whose id is the sguid of an unlinked DB response (sguid trimmed, test links excluded).
      Ids used by two clinic rows (reused) are never anchors and never linked (reused_rule "pick": one row is kept,
-     the other is not loaded and is listed in <out>_discarded_rows.csv).
+     the other is not loaded and is listed in <out>_discarded_rows.csv; "flowchart": see the code).
   2. Send date: within each id scheme, legacy ids are time-ordered. Schemes with Spearman < 0.95 (check C10)
      instead get the anchors' send-time quantiles by id rank. Isotonic fit id sequence ->
      (response start - send->response median), interpolated between isotonic block midpoints. Day = predicted day
@@ -76,7 +76,8 @@ VISIT_RULE = CONFIG.get("visit_rule", "from_send") # "file_or_send": the file's 
 INVITE_RULE = CONFIG.get("invite_rule", "replay")  # "all": every legacy row with a phone was sent
 STATUS_RULE = CONFIG.get("status_rule", "estimate")  # "file": the file's SMS status (real), estimate only when empty
 REUSED_RULE = CONFIG.get("reused_rule", "keep")    # "raw_only": rows on repeated ids are stored as source rows only;
-                                                  # "pick": one row per repeated id is kept, the others are not loaded
+                                                  # "pick": one row per repeated id is kept, the others are not loaded;
+                                                  # "flowchart": rows without phone or SMS status are not loaded
 FILE_STATUS = {"DELIVERED": "DELIVERED", "UNDELIVERABLE": "UNDELIVERABLE", "UNDELIVERED": "UNDELIVERABLE",
                "EXPIRED": "EXPIRED", "REJECTED": "REJECTED", "PENDING": "PENDING"}
 
@@ -95,9 +96,26 @@ else:
 assert d.loc[platform, "cid"].str.match(UUID).all(), "platform row without a uuid id"
 raw_only = ~platform & ((d.cid == "") | d.cid.isin(CONFIG["raw_only_ids"]))
 counts = d.loc[~platform & ~raw_only, "cid"].value_counts()
+drop = pd.Series(False, index=d.index)  # rows not loaded at all (reused_rule "pick"/"flowchart"); they stay in the clinic file
+why = {}
 if REUSED_RULE == "raw_only":  # decision DEV-232/7: not loaded, ops decide
     raw_only = raw_only | (~platform & d.cid.map(counts).gt(1))
-legacy = ~platform & ~raw_only
+elif REUSED_RULE == "flowchart":  # decision COPS-234 A2 (ops flowchart): on a repeated id, a row without a phone or an
+    # SMS status is not loaded; copies equal in every other column keep one (the delivered one); different rows are kept
+    rep = ~platform & ~raw_only & d.cid.map(counts).gt(1)
+    st = d.status.str.strip().str.upper()
+    drop = rep & ((d.phone.str.replace(r"\D", "", regex=True).str.len() < 8) | (st == ""))
+    for i in d.index[drop]:
+        why[i] = ("", "no phone or no SMS status", "")
+    same = [c for c in RAW_COLS if c not in ("id", "status")]
+    for _, g in d[rep & ~drop].groupby(same + ["cid"], sort=False):
+        if len(g) > 1:
+            dl = [i for i in g.index if st[i] == "DELIVERED"]
+            keep = dl[0] if len(dl) == 1 else g.index[0]
+            for i in g.index.drop(keep):
+                drop[i] = True
+                why[i] = (d.at[keep, "row_no"], "identical copy", "")
+legacy = ~platform & ~raw_only & ~drop
 counts = d.loc[legacy, "cid"].value_counts()
 reused = legacy & d.cid.map(counts).gt(1)
 
@@ -123,8 +141,6 @@ r["key"] = r.sguid.str.strip()
 r = r[(r.is_test != "True") & ~r.key.str.contains(TEST)]
 r.loc[r.alchemer_response_id.isin(CONFIG.get("alchemer_deleted", ())), "status"] = "Deleted"  # Deleted in Alchemer, Complete in the DB
 r["start"] = pd.to_datetime(r.started_utc).dt.tz_localize("UTC")
-drop = pd.Series(False, index=d.index)  # rows not loaded at all (reused_rule "pick"); they stay in the clinic file
-why = {}
 if REUSED_RULE == "pick":  # decision COPS-224 A1: keep one row per repeated id
     # keep: the only row with a phone (an SMS needs one); else, for an answered id, the row whose file neighbours'
     # responses are closest in time to this response (ESTIMATED); else the first row in the file

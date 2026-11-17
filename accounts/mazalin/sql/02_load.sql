@@ -1,7 +1,7 @@
 -- Poliklinika Mazalin legacy import (MAZALIN_LEGACY_V1). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.
 -- Part 2: the load. Requires 01_before_import.sql, and mazalin_full_v1.csv imported into public.stg_mazalin_full (all columns TEXT).
 -- Creates: Patients that don't exist yet (existing Patients are never changed); 2453 legacy Patient Visits
--- (never surveyed); 1 mock sending batch with 2453 legacy invites; links NO Survey Responses (link_responses false: the 437 real responses stay as they are, no legacy_invite_map rows);
+-- (never surveyed); 1 mock sending batch with 2453 legacy invites; links 437 legacy Survey Responses;
 -- stores all 30481 source rows untouched in legacy_source_row. Platform rows (28028) are only linked, never created.
 -- Run the WHOLE file. Check the GUI's commit mode first. On any error: run ROLLBACK; and send the message.
 
@@ -125,6 +125,9 @@ DO $$ DECLARE n int; BEGIN
 END $$;
 
 UPDATE stg SET visit_msg_id = uuid_generate_v5('4165e479-e2bd-496d-af78-75e49226cf22'::uuid, 'mazalin-legacy-' || row_no) WHERE row_kind = 'legacy_invite';
+UPDATE stg SET visit_msg_id = legacy_sguid::uuid             -- the original survey link id (uuid_legacy_ids)
+WHERE row_kind = 'legacy_invite' AND NOT sguid_reused
+  AND legacy_sguid ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 
 DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg s JOIN public.visit_msg vm ON vm.id = s.visit_msg_id; IF n > 0 THEN RAISE EXCEPTION 'legacy visit_msg ids already exist %', n; END IF;
@@ -224,8 +227,19 @@ LEFT JOIN LATERAL (
   LIMIT 1) t ON true
 WHERE s.row_kind = 'legacy_invite';
 
--- 7) No linking (link_responses false, DEV-232 decision 2): no legacy_invite_map rows, Survey Responses untouched.
---    Ops decide; linking later = config change, rebuild, rerun.
+-- 7) Link table + link the responses ----------------------------------------------------------------------------------
+-- Key = the sguid exactly as Alchemer stores it (link_sguid) for answered invites, else the legacy id.
+-- Not mapped: reused ids (decision 13) and sguids whose response is Deleted (decision 12).
+INSERT INTO public.legacy_invite_map (account_id, legacy_sguid, visit_msg_id)
+SELECT c.account_id, coalesce(s.link_sguid, s.legacy_sguid), s.visit_msg_id
+FROM stg s CROSS JOIN cfg c
+WHERE s.row_kind = 'legacy_invite' AND NOT s.sguid_reused
+  AND NOT EXISTS (SELECT 1 FROM public.survey_response sr WHERE sr."surveyId" = c.survey_id AND sr.status = 'Deleted'
+                  AND btrim(sr.sguid) = s.legacy_sguid);
+
+UPDATE public.survey_response sr SET sguid = sr.sguid             -- fires the trigger, which fills visit_msg_id
+FROM stg s, cfg c
+WHERE sr."surveyId" = c.survey_id AND sr.visit_msg_id IS NULL AND sr.sguid = s.link_sguid AND s.has_response;
 
 -- 8) Platform rows: link to the existing invite / visit (nothing created) ----------------------------------------------
 UPDATE stg s SET visit_msg_id = vm.id, pv_id = vm.patient_visit_id
@@ -268,7 +282,7 @@ DO $$ DECLARE n int; c record; b int; BEGIN
   SELECT count(*) INTO n FROM public.patient_visit_param WHERE patient_visit_id IN (SELECT pv_id FROM stg WHERE is_legacy);
     IF n <> 2453 THEN RAISE EXCEPTION 'params %', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
-    WHERE vm.sending_batch_id = b;                                           IF n <> 0 THEN RAISE EXCEPTION 'linked responses %, expected 0', n; END IF;
+    WHERE vm.sending_batch_id = b;                                           IF n <> 437 THEN RAISE EXCEPTION 'linked responses %, expected 437', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
     WHERE vm.sending_batch_id = b AND sr.status = 'Deleted';                 IF n > 0 THEN RAISE EXCEPTION 'Deleted responses linked %', n; END IF;
   SELECT count(*) INTO n FROM public.legacy_source_row WHERE account_id = c.account_id AND source_file = c.source_file;

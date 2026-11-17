@@ -32,17 +32,17 @@
   "period": "Dec 2023 - Mar 2024 visits (two bulk sends before Visit Msgs were stored)",
   "estimated": "send time (bulk sends 12 Feb 2024 15:00 and 27 Mar 2024 16:40 Zagreb, from the real response times). REAL: visit dates; SMS delivery status from the clinic file, except 15 answered rows corrected to DELIVERED (status_source=corrected)",
   "layout": 2,
-  "link_responses": false,
+  "link_responses": true,
   "expect": {
     "rows": 30481,
     "platform": 28028,
     "legacy_invite": 2453,
     "legacy_visit": 0,
     "legacy_raw": 0,
-    "linked": 0,
-    "mapped_link": 0,
+    "linked": 437,
+    "mapped_link": 437,
     "reused_invites": 0,
-    "legacy_no_phone": 0,
-    "answered": 437
-  }
+    "legacy_no_phone": 0
+  },
+  "uuid_legacy_ids": true
 }

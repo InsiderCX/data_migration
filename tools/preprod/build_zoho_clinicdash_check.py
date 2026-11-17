@@ -83,8 +83,8 @@ for t in [
     "Clinicdash rules (InsiderCX code, General dashboard): responses with a Visit Msg and a score 0-10, dated by "
     "'dateStarted' in the Clinicdash User's time zone (Europe/Zagreb); no filter on status or test data; NPS = "
     "% promoters (9-10) - % detractors (0-6), half up to 1 decimal. NPS Trends shows one line per Location (no Account total).",
-    "Kvaternik, Mazalin, Optical Express: loaded append-only on staging. 'After the load' links their legacy responses "
-    "as Karlo decided in COPS-234 (A1); 'today' columns show what staging has now (legacy months 0).",
+    "Kvaternik, Mazalin, Optical Express: linked on staging 17 Nov 2026 as Karlo decided in COPS-234 (A1). 'Clinicdash "
+    "today on prod' shows prod without the legacy load.",
     "Decision 17 Nov 2026 (Ana): Zoho is not changed. Its differences stay as known differences with the reasons in column Why.",
     "Decision 17 Nov 2026 (Ana): legacy months show no Comment Sentiment in Clinicdash (sentiment is not run on legacy comments). Zoho Pages embedded in Clinicdash show Zoho's numbers, not Clinicdash's.",
     "Not compared (not comparable): sends, delivery and response rate (legacy ones are estimated), breakdowns that exist only in Zoho.",

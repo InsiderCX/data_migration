@@ -115,7 +115,7 @@ SELECT to_regclass('public.legacy_sending_batch') AS t1,
        to_regclass('public.stg_opticalexpress_full')                  AS staging,
        (SELECT count(*) FROM public.stg_opticalexpress_full)          AS staging_rows;
 
--- After the GUI import, run this on its own. Expect 7931 / 3850 / 3966 / 2 / 113
+-- After the GUI import, run this on its own. Expect 7903 / 3850 / 4051 / 2 / 0
 -- SELECT count(*) AS total, count(*) FILTER (WHERE row_kind = 'platform') AS platform,
 --        count(*) FILTER (WHERE row_kind = 'legacy_invite') AS legacy_invite, count(*) FILTER (WHERE row_kind = 'legacy_visit') AS legacy_visit,
 --        count(*) FILTER (WHERE row_kind = 'legacy_raw') AS legacy_raw
