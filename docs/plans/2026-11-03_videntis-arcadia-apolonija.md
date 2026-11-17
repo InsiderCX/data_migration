@@ -45,7 +45,7 @@ Projected after the changes (real responses, projected totals): Apolonija Clinic
 
 **Open, in order:**
 1. ~~Staging reruns~~ **done 17 Nov 2026**: Arcadia batch 13101 (1,072 linked), Apolonija batch 13103 (1,515 linked); both validated, exports identical, run files `accounts/<account>/runs/2026-11-17_staging.md`.
-2. Sync with Karlo: tell him how A1 was decided; ask for the written C1 line per Account.
+2. Ana validates by hand: Linear **DEV-312** (workbook attached). Then ops sign off in **COPS-333** (blocked by DEV-312, unassigned until Ana assigns it to Karlo): "Legacy data OK for production" per Account. PR #6 is open for review.
 3. DEV-232 (later, own branch): apply Karlo's COPS-234 answers of 9 Nov (link where there is visit data, Optical repeated ids per his marked file, discard the 32 Optical responses without an invite). Needs his marked file.
 4. Items 4–7 of the 4 Nov list below are unchanged (faster `99_rollback.sql` and `PRODUCTION.md`; dev ticket for Arcadia 2267 and Alchemer deletions, now covering Karlo's "not shown anywhere"; C04–C06 with the clinic; drop staging tables after sign-off).
 
