@@ -15,6 +15,17 @@ Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 | 5 Ops validation (DEV-184) | **sent to ops 4 Nov 2026** as Linear [COPS-224](https://linear.app/insidercx/issue/COPS-224) (Karlo), with two workbooks. Waiting for answers. DEV-184 is done only when ops have validated the data |
 | 5–7 | not started |
 
+## Where we stopped (19 Nov 2026)
+
+DEV-312 done (Ana's manual check). The DEV-312 table now has two reason columns: Zoho vs Clinicdash after load, and Clinicdash staging vs after load. COPS-333 explains to ops why staging is lower.
+
+- **Staging is a prod copy from 28 Sep 2026.** It has prod's Survey Responses with `created_at < 2026-09-29 00:00 UTC`, plus our loads; Alchemer has not synced to staging since. That cut-off plus the loads reproduces all 12 of Ana's Clinicdash staging numbers exactly (all time and Sep 2026, six Accounts; real). So staging is lower for late Sep 2026 onwards (e.g. Mazalin all time 5,187 on staging vs 5,616 after load). Legacy months match. Checked on the prod replica: staging is not reachable by `psql` from the laptop (private host, timeout).
+- **Zoho read on 19 Nov vs Clinicdash after load on 17 Nov.** Zoho has picked up newer November answers since, so the differences moved. Clinicdash after load on 19 Nov (prod + load, projected): Videntis 996, Arcadia 2,405 (-93 vs Zoho), Apolonija 2,666 (+183), Kvaternik 1,754 (+2), Mazalin 5,635 (+2), Optical Express 1,286 (+1). The extra +1/+2 are answers newer than Zoho's refresh (Kvaternik also 146).
+- **Open: Videntis Zoho chart.** Ana's reading (all time 993 / 75.83, Sep 2026 31 / 51.61) equals Zoho's `JOINED_FINAL` table (995 scored; Sep 33 with 7 detractors) minus exactly 2 Sep 2026 detractors. The chart's filter can't be read with the Zamera token (error 8540). Ask Ana which chart she read.
+- **Open: Apolonija Sep 2026.** Ana reads 46 / 78.26 in Zoho; it was 47 on 17 Nov (1 promoter fewer). Not checked: Zoho returned "Access Denied" after a burst.
+
+**Production chain in Linear** (each blocked by the one before): COPS-333 ops sign off staging → DEV-185 load to production (description written 19 Nov) → DEV-319 Ana validates production against Zoho → COPS-338 ops validate production ("Legacy data OK on production" per Account).
+
 ## Where we stopped (17 Nov 2026)
 
 Branch `fix/DEV-184-exclude-alchemer-deleted-responses` (from `main`; the DEV-184 branch was merged as PR #5 on 6 Nov 2026). Loads on staging are still the 3 Nov ones (Videntis 13087, Arcadia 13089, Apolonija 13091).
