@@ -37,7 +37,7 @@ All files hold Patient PII and live in `data/` (git-ignored).
 
 | Group | Count | Linkable? |
 |---|---|---|
-| uuid sguid = a legacy row id | **132** | yes, but **not linked now** (decision 2) |
+| uuid sguid = a legacy row id | **132** | yes, **linked** (COPS-234 A1, 17 Nov 2026) |
 | Text / test sguid | 4 | no |
 | Empty sguid | 1 | no |
 | Deleted | 0 | — |
@@ -86,8 +86,8 @@ python3 -I scripts/1_build_load_file.py data/Pacijenti_joined_Kvaternik.csv data
 | Send date | all 727 on 21 Feb 2024 14:50 Zagreb (estimated); 0 sends had to be moved before their response |
 | Status | all 727 from the file (real): DELIVERED 696, REJECTED 13, PENDING 12, UNDELIVERABLE 5, EXPIRED 1 |
 | Location | by name: Subiceva 557 → Kvaternik Subiceva, Kostanjevec 170 → Kvaternik Kostanjevec; each with its own template |
-| Responses | 132 real responses on legacy invites, **not linked** (decision 2). If linked: 19.0% (platform 21.4%) |
+| Responses | 132 real responses on legacy invites, **linked** (COPS-234 A1, 17 Nov 2026; Visit Msgs keep the uuid link id). If linked: 19.0% (platform 21.4%) |
 | Year of birth | 1900–2026 only; the shifted row's `#VALUE!` → empty (O6) |
 | Original columns | `raw_*`, byte-identical; the export back (`04`) equals the clinic file (mock test) |
 
-SQL: `sql_config.json` (`layout` 2, `link_responses` false) rendered by `tools/render_legacy_sql.py`. Mock test: `bash tests/run_mock_test.sh data/Pacijenti_joined_Kvaternik.csv` → ALL CHECKS PASSED (6 Nov 2026), including: no existing row changed, no `legacy_invite_map` rows, 0 responses linked even after a simulated Alchemer sync.
+SQL: `sql_config.json` (`layout` 2, `link_responses` true, `uuid_legacy_ids` true) rendered by `tools/render_legacy_sql.py`. Mock test: `bash tests/run_mock_test.sh data/Pacijenti_joined_Kvaternik.csv` → ALL CHECKS PASSED (6 Nov 2026), including: no existing row changed, no `legacy_invite_map` rows, 0 responses linked even after a simulated Alchemer sync.

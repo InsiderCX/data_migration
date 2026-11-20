@@ -13,6 +13,20 @@ Follows `docs/playbook.md`, with Videntis (`accounts/videntis/`) as the template
 | 3 EU staging run per Account | **done 6 Nov 2026**, all three loaded and left for ops: Kvaternik batch 13097, Mazalin 13095, Optical Express 13099. Run logs in `accounts/<account>/runs/2026-11-06_staging.md`. Found and fixed on staging: country foreign key (decision 13) |
 | 4 Ops package (differences workbook, COPS checklist) | **ready 6 Nov 2026**, waiting for Ana to create the COPS ticket. Workbook `out/DEV-232_ops_review_2026-11-06.xlsx` (git-ignored, ids only), built by `tools/dev232/build_ops_workbook.py`; ticket text `out/dev232/COPS_ticket_DEV-232.txt` |
 
+## Where we stopped (17 Nov 2026)
+
+Karlo answered COPS-234 on 9 Nov 2026. On 17 Nov Ana put these three Accounts into the same validation as Videntis, Arcadia and Apolonija (Linear DEV-312, then ops sign-off COPS-333). Work on branch `fix/DEV-184-exclude-alchemer-deleted-responses` (PR #6).
+
+| Item | Ops answer | Done (17 Nov 2026) |
+|---|---|---|
+| A1 link the legacy responses | "Link where it is possible" | `link_responses` true: Kvaternik 132, Mazalin 437, Optical 634 linked. Kvaternik and Mazalin legacy links were uuids, so their legacy Visit Msgs keep that uuid as id (`uuid_legacy_ids`; the link trigger only uses the legacy map for ids that are not uuids). |
+| A2 Optical 56 repeated ids | his flowchart (no phone or no SMS status -> discard; identical copies -> keep one, the delivered one; else keep) | `reused_rule="flowchart"`: 28 rows not loaded, 85 loaded (no identical copies; different phones). Export back = clinic file minus the 28. |
+| A3 Optical 32 responses without an invite | discard | nothing to do: not in the clinic file, never linked |
+| A4-A6, B1, B2 | OK | none |
+| C1 | "OK for staging", visual check before production | COPS-333 |
+
+Mock tests pass for all three; staging rerun 17 Nov (see `accounts/<account>/runs/2026-11-17_staging.md`). Zoho vs Clinicdash: workbook `out/preprod/Zoho_vs_Clinicdash_2026-11-17.xlsx` (Kvaternik and Mazalin Feb 2024, Optical Jun 2023 identical; totals differ only by Zoho's refresh and Kvaternik's Deleted response 146).
+
 ## Where we stopped (6 Nov 2026, end of day)
 
 Branch `feat/DEV-232-legacy-import-kvaternik-mazalin-opticalexpress` (stacked on DEV-184; local commits, not pushed, no PR). All three Accounts are loaded on EU staging and left there for ops: Kvaternik batch 13097, Mazalin 13095, Optical Express 13099. Append only, 0 responses linked.

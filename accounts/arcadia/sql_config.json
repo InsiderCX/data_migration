@@ -32,14 +32,14 @@
   "period": "Jun 2023 - 23 Apr 2025",
   "estimated": "invite selection (90-day quarantine + age>=18 replay; responded always included), send time (15:00 Zagreb), visit date (send - 26.2 h), delivery status (88.2% platform rate)",
   "expect": {
-    "rows": 13595,
+    "rows": 13306,
     "platform": 6497,
-    "legacy_invite": 5255,
-    "legacy_visit": 1843,
+    "legacy_invite": 5097,
+    "legacy_visit": 1712,
     "legacy_raw": 0,
-    "linked": 979,
-    "mapped_link": 979,
-    "reused_invites": 431,
-    "legacy_no_phone": 152
+    "linked": 1072,
+    "mapped_link": 1072,
+    "reused_invites": 0,
+    "legacy_no_phone": 76
   }
 }

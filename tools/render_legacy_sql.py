@@ -10,7 +10,7 @@ The rendered .sql files are what a person runs in the GUI. Every Account gets th
 Written for the Videntis / Arcadia / Apolonija imports (DEV-162). SIE's hand-written SQL in accounts/sie/ is unchanged.
 DEV-232 config keys (left out = DEV-162 SQL, unchanged): "layout": 2 (real SMS statuses, status_source in meta,
 language_out, Location per row by name), "link_responses": false (append only: no legacy_invite_map rows, responses
-untouched), "n_locations".
+untouched), "n_locations", "uuid_legacy_ids": true (legacy Visit Msgs keep the uuid survey link id as their id).
 """
 import json
 import pathlib
@@ -56,6 +56,12 @@ V2 = C.get("layout", 1) == 2
 LINK = C.get("link_responses", True)
 ANS = X.get("answered", X["linked"])      # real responses on legacy invites (= linked unless link_responses is false)
 NLOC = C.get("n_locations", 1)
+# "uuid_legacy_ids": legacy survey links were uuids (Kvaternik, Mazalin): the Visit Msg takes that uuid as its id, so the
+# link trigger's uuid path links the response (its legacy-map fallback only runs for ids that are not uuids)
+UUID_IDS = ("""
+UPDATE stg SET visit_msg_id = legacy_sguid::uuid             -- the original survey link id (uuid_legacy_ids)
+WHERE row_kind = 'legacy_invite' AND NOT sguid_reused
+  AND legacy_sguid ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';""" if C.get("uuid_legacy_ids") else "")
 STG_COLS = (["row_no", "row_kind"] + [R(c) for c in RAW] +
             ["legacy_sguid", "link_sguid", "sguid_reused", "phone_clean", "est_visit_date", "est_sent_at", "est_status",
              "has_response", "procedure_out", "derived_year_of_birth", "sort_ts"] +
@@ -295,7 +301,7 @@ DO $$ DECLARE n int; BEGIN
     IF n <> {ANS} THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected {ANS} (staging older than prod?)', n; END IF;{V2_CHECKS}
 END $$;
 
-UPDATE stg SET visit_msg_id = uuid_generate_v5({q(C['uuid_ns'])}::uuid, {q(C['slug'] + '-legacy-')} || row_no) WHERE row_kind = 'legacy_invite';
+UPDATE stg SET visit_msg_id = uuid_generate_v5({q(C['uuid_ns'])}::uuid, {q(C['slug'] + '-legacy-')} || row_no) WHERE row_kind = 'legacy_invite';{UUID_IDS}
 
 DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg s JOIN public.visit_msg vm ON vm.id = s.visit_msg_id; IF n > 0 THEN RAISE EXCEPTION 'legacy visit_msg ids already exist %', n; END IF;

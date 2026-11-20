@@ -13,7 +13,8 @@ Only the CONFIG block differs between Accounts; the code below it is identical (
 
 Method (SIE's, re-fitted per Account; every est_* value is ESTIMATED):
   1. Anchors: legacy rows whose id is the sguid of an unlinked DB response (sguid trimmed, test links excluded).
-     Ids used by two clinic rows (reused) are never anchors and never linked.
+     Ids used by two clinic rows (reused) are never anchors and never linked (reused_rule "pick": one row is kept,
+     the other is not loaded and is listed in <out>_discarded_rows.csv; "flowchart": see the code).
   2. Send date: within each id scheme, legacy ids are time-ordered. Schemes with Spearman < 0.95 (check C10)
      instead get the anchors' send-time quantiles by id rank. Isotonic fit id sequence ->
      (response start - send->response median), interpolated between isotonic block midpoints. Day = predicted day
@@ -24,7 +25,8 @@ Method (SIE's, re-fitted per Account; every est_* value is ESTIMATED):
      AGE_RULE; anchors always invited; rows without a phone only if they are anchors.
   5. Status: anchors DELIVERED; others DELIVERED except a deterministic share (md5(id) mod 1000 < UNDELIVERED_PER_MILLE).
   6. Year of birth per YOB_RULE.
-Linked responses: anchors that are not Deleted (decision 12). link_sguid is the sguid exactly as Alchemer stores it.
+Linked responses: anchors that are not Deleted (decision 12), in the DB or in Alchemer (CONFIG alchemer_deleted).
+link_sguid is the sguid exactly as Alchemer stores it.
 DEV-232 options (CONFIG keys, see the code): layout, platform_rule, scheme_rule, send_rule, visit_rule, invite_rule,
 status_rule, reused_rule. Left out, each keeps the DEV-162 behaviour above.
 """
@@ -74,7 +76,9 @@ SEND_RULE = CONFIG.get("send_rule", "isotonic")    # "waves": fixed send per vis
 VISIT_RULE = CONFIG.get("visit_rule", "from_send") # "file_or_send": the file's visit date when before the send
 INVITE_RULE = CONFIG.get("invite_rule", "replay")  # "all": every legacy row with a phone was sent
 STATUS_RULE = CONFIG.get("status_rule", "estimate")  # "file": the file's SMS status (real), estimate only when empty
-REUSED_RULE = CONFIG.get("reused_rule", "keep")    # "raw_only": rows on repeated ids are stored as source rows only
+REUSED_RULE = CONFIG.get("reused_rule", "keep")    # "raw_only": rows on repeated ids are stored as source rows only;
+                                                  # "pick": one row per repeated id is kept, the others are not loaded;
+                                                  # "flowchart": rows without phone or SMS status are not loaded
 FILE_STATUS = {"DELIVERED": "DELIVERED", "UNDELIVERABLE": "UNDELIVERABLE", "UNDELIVERED": "UNDELIVERABLE",
                "EXPIRED": "EXPIRED", "REJECTED": "REJECTED", "PENDING": "PENDING"}
 
@@ -93,9 +97,26 @@ else:
 assert d.loc[platform, "cid"].str.match(UUID).all(), "platform row without a uuid id"
 raw_only = ~platform & ((d.cid == "") | d.cid.isin(CONFIG["raw_only_ids"]))
 counts = d.loc[~platform & ~raw_only, "cid"].value_counts()
+drop = pd.Series(False, index=d.index)  # rows not loaded at all (reused_rule "pick"/"flowchart"); they stay in the clinic file
+why = {}
 if REUSED_RULE == "raw_only":  # decision DEV-232/7: not loaded, ops decide
     raw_only = raw_only | (~platform & d.cid.map(counts).gt(1))
-legacy = ~platform & ~raw_only
+elif REUSED_RULE == "flowchart":  # decision COPS-234 A2 (ops flowchart): on a repeated id, a row without a phone or an
+    # SMS status is not loaded; copies equal in every other column keep one (the delivered one); different rows are kept
+    rep = ~platform & ~raw_only & d.cid.map(counts).gt(1)
+    st = d.status.str.strip().str.upper()
+    drop = rep & ((d.phone.str.replace(r"\D", "", regex=True).str.len() < 8) | (st == ""))
+    for i in d.index[drop]:
+        why[i] = ("", "no phone or no SMS status", "")
+    same = [c for c in RAW_COLS if c not in ("id", "status")]
+    for _, g in d[rep & ~drop].groupby(same + ["cid"], sort=False):
+        if len(g) > 1:
+            dl = [i for i in g.index if st[i] == "DELIVERED"]
+            keep = dl[0] if len(dl) == 1 else g.index[0]
+            for i in g.index.drop(keep):
+                drop[i] = True
+                why[i] = (d.at[keep, "row_no"], "identical copy", "")
+legacy = ~platform & ~raw_only & ~drop
 counts = d.loc[legacy, "cid"].value_counts()
 reused = legacy & d.cid.map(counts).gt(1)
 
@@ -119,7 +140,34 @@ leg[["scheme", "seq"]] = pd.DataFrame([scheme(i) for i in leg.cid], index=leg.in
 r = pd.read_csv(RESP, dtype=str, keep_default_na=False)
 r["key"] = r.sguid.str.strip()
 r = r[(r.is_test != "True") & ~r.key.str.contains(TEST)]
+r.loc[r.alchemer_response_id.isin(CONFIG.get("alchemer_deleted", ())), "status"] = "Deleted"  # Deleted in Alchemer, Complete in the DB
 r["start"] = pd.to_datetime(r.started_utc).dt.tz_localize("UTC")
+if REUSED_RULE == "pick":  # decision COPS-224 A1: keep one row per repeated id
+    # keep: the only row with a phone (an SMS needs one); else, for an answered id, the row whose file neighbours'
+    # responses are closest in time to this response (ESTIMATED); else the first row in the file
+    has_ph = d.phone.str.replace(r"\D", "", regex=True).str.len() >= 8
+    rday = (r.sort_values("start").drop_duplicates("key").set_index("key").start - E).dt.total_seconds() / 86400
+    own = d[legacy & ~reused & d.cid.isin(rday.index)]
+    own_pos, own_day = own.row_no.to_numpy(), rday[own.cid].to_numpy()
+
+    def gap(i, day):  # median days between the response and the responses of the 10 nearest linked rows (file order)
+        near = np.argsort(np.abs(own_pos - d.at[i, "row_no"]), kind="stable")[:10]
+        return np.median(np.abs(own_day[near] - day))
+
+    for cid, g in d[reused].groupby("cid", sort=False):
+        cand = [i for i in g.index if has_ph[i]] or list(g.index)
+        if len(cand) == 1:
+            keep, rule = cand[0], "only row with a phone"
+        elif cid in rday.index:
+            keep, rule = min(cand, key=lambda i: gap(i, rday[cid])), "closest in time (estimated)"
+        else:
+            keep, rule = cand[0], "first row"
+        for i in g.index.drop(keep):
+            drop[i] = True
+            why[i] = (d.at[keep, "row_no"], rule, "true" if cid in rday.index else "false")
+    legacy &= ~drop
+    reused = legacy & d.cid.map(d.loc[legacy, "cid"].value_counts()).gt(1)
+    leg = leg[legacy[leg.index].to_numpy()]
 unique_ids = set(leg.loc[~reused[legacy], "cid"])
 anc = r[r.key.isin(unique_ids)].sort_values("start").drop_duplicates("key")
 anc = anc.rename(columns={"sguid": "resp_sguid", "status": "resp_status", "start": "resp_start"})
@@ -287,12 +335,17 @@ if LAYOUT == 2:
     assert cc[cc != ""].isin(set(cmap)).all(), f"country values without a mapping {set(cc[cc != ''][~cc.isin(set(cmap))])}"
     out["country_out"] = ""
     out.loc[legacy, "country_out"] = cc.map(cmap).fillna("")
+out = out[~drop]
 out.to_csv(OUT, index=False)
+if drop.any():  # ids only, no patient data; git-ignored next to the load file
+    pd.DataFrame([(d.at[i, "row_no"], d.at[i, "cid"], k, rule, ans) for i, (k, rule, ans) in why.items()],
+                 columns=["row_no", "legacy_id", "kept_row_no", "rule", "id_answered"]).to_csv(
+        OUT[:-4] + "_discarded_rows.csv", index=False)
 
 # summary (stdout): counts, then estimated sends per quarter
 print("row kinds", out.row_kind.value_counts().to_dict())
 print("anchors", int(leg.anchor.sum()), "| linked responses", int(linked.sum()), "| deleted anchors", int((leg.anchor & ~linked).sum()),
-      "| reused-id rows", int(reused.sum()), "| invites", int(invited.sum()))
+      "| reused-id rows", int(reused.sum()), "| invites", int(invited.sum()), "| discarded rows", int(drop.sum()))
 inv = leg[invited]
 q = pd.DataFrame({"q": inv.sent.dt.tz_convert(TZ).dt.to_period("Q").astype(str), "deliv": inv.est_status == "DELIVERED",
                   "resp": linked[invited]}).groupby("q").agg(sent=("deliv", "size"), delivered=("deliv", "sum"), responses=("resp", "sum"))

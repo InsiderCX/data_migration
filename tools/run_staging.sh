@@ -25,9 +25,12 @@ print("\n;;;\n".join(q+";" for q in qs))
 PY
 i=0; while IFS= read -r -d $'\0' q; do i=$((i+1)); echo "-- query $i"; P -A -F ' | ' -c "$q" || fail "5.$i"; done < <(python3 -c "import sys;print('\0'.join(x.strip() for x in open('/tmp/03_split_$A.txt').read().split(';;;') if x.strip()), end='\0')")
 step "6 04 export + compare by value"; P --csv -f $ACC/sql/04_export_original_csv.sql > $ACC/out/stg_export_$(date +%F).csv || fail 6
-$REPO/.venv/bin/python -I - "$ACC/out/stg_export_$(date +%F).csv" "$ACC/data/$CLINIC" <<'PY' || exit 1
-import sys, pandas as pd
+$REPO/.venv/bin/python -I - "$ACC/out/stg_export_$(date +%F).csv" "$ACC/data/$CLINIC" "$ACC/data/${LOAD%.csv}_discarded_rows.csv" <<'PY' || exit 1
+import os, sys, pandas as pd
 a = pd.read_csv(sys.argv[1], dtype=str, keep_default_na=False); b = pd.read_csv(sys.argv[2], dtype=str, encoding="utf-8-sig", keep_default_na=False)
+if os.path.exists(sys.argv[3]):  # reused_rule "pick": rows the builder left out (row_no is 1-based file order)
+    gone = set(pd.read_csv(sys.argv[3]).row_no); print(f"original minus {len(gone)} discarded rows")
+    b = b[~pd.Series(range(1, len(b) + 1), index=b.index).isin(gone)].reset_index(drop=True)
 print(f"export rows {len(a)} | original rows {len(b)} | identical values: {a.equals(b)}"); sys.exit(0 if a.equals(b) else 1)
 PY
 step "7 99_rollback.sql"; P -A -F ' | ' -f $ACC/sql/99_rollback.sql 2>&1 | grep -v "^BEGIN\|^COMMIT\|^DELETE\|^UPDATE\|^SELECT\|^CREATE\|^DO$"; [ ${PIPESTATUS[0]} = 0 ] || fail 7
