@@ -69,7 +69,7 @@ Counts from the load files and the staging runs of 17 Nov 2026 (real on staging)
 
 ## What to look at in review
 
-This branch holds only what runs on production: `accounts/<account>/sql/` for the six Accounts and this doc. `main` already has an earlier version of these scripts (the first staging runs, 3–6 Nov 2026), so the PR diff shows only what changed since then. Review the files themselves, not only the diff.
+The scripts that run on production are `accounts/<account>/sql/` for the six Accounts, already on `main` (merged with the staging work in PR #6, byte-identical to what passed staging on 17 Nov 2026). The PR diff therefore shows only this doc. Review the script files themselves.
 
 1. `02_load.sql` of one Account end to end (Kvaternik is short). The other five come from the same template; they differ only by the Account's settings (ids, names, expected counts, linking options).
 2. The guards: wrong database or Account, load already present, staging table missing or type-converted by the GUI, expected counts.
