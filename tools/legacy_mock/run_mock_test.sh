@@ -75,14 +75,17 @@ print(f"   {len(qs)} queries")
 EOF
 for f in 03_*.sql; do $P -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>err.txt && echo "   ok   $f" || { echo "   FAIL $f: $(head -1 err.txt)"; FAIL=1; }; done
 $P --csv -v ON_ERROR_STOP=1 -f sql/04_export_original_csv.sql > export.csv
-SAME=$("$PYTHON" -I - "$ORIG" <<'EOF'
-import sys, pandas as pd
+SAME=$("$PYTHON" -I - "$ORIG" "$ACC_DIR/data/${LOAD%.csv}_discarded_rows.csv" <<'EOF'
+import os, sys, pandas as pd
 a = pd.read_csv("export.csv", dtype=str, keep_default_na=False)
 b = pd.read_csv(sys.argv[1], dtype=str, encoding="utf-8-sig", keep_default_na=False)
+if os.path.exists(sys.argv[2]):  # reused_rule "pick": rows the builder left out (row_no is 1-based file order)
+    gone = set(pd.read_csv(sys.argv[2]).row_no)
+    b = b[~pd.Series(range(1, len(b) + 1), index=b.index).isin(gone)].reset_index(drop=True)
 print(a.equals(b))
 EOF
 )
-check "04 export identical to the original (values)" "$SAME" "True"
+check "04 export identical to the original minus discarded rows (values)" "$SAME" "True"
 run 99_rollback.sql
 check "after rollback = baseline" "$(snap)" "$BASE"
 run 01_before_import.sql

@@ -15,6 +15,51 @@ Follows `docs/playbook.md`, with SIE (`accounts/sie/`) as the template.
 | 5 Ops validation (DEV-184) | **sent to ops 4 Nov 2026** as Linear [COPS-224](https://linear.app/insidercx/issue/COPS-224) (Karlo), with two workbooks. Waiting for answers. DEV-184 is done only when ops have validated the data |
 | 5–7 | not started |
 
+## Where we stopped (19 Nov 2026)
+
+DEV-312 done (Ana's manual check). The DEV-312 table now has two reason columns: Zoho vs Clinicdash after load, and Clinicdash staging vs after load. COPS-333 explains to ops why staging is lower.
+
+- **Staging is a prod copy from 28 Sep 2026.** It has prod's Survey Responses with `created_at < 2026-09-29 00:00 UTC`, plus our loads; Alchemer has not synced to staging since. That cut-off plus the loads reproduces all 12 of Ana's Clinicdash staging numbers exactly (all time and Sep 2026, six Accounts; real). So staging is lower for late Sep 2026 onwards (e.g. Mazalin all time 5,187 on staging vs 5,616 after load). Legacy months match. Checked on the prod replica: staging is not reachable by `psql` from the laptop (private host, timeout).
+- **Zoho read on 19 Nov vs Clinicdash after load on 17 Nov.** Zoho has picked up newer November answers since, so the differences moved. Clinicdash after load on 19 Nov (prod + load, projected): Videntis 996, Arcadia 2,405 (-93 vs Zoho), Apolonija 2,666 (+183), Kvaternik 1,754 (+2), Mazalin 5,635 (+2), Optical Express 1,286 (+1). The extra +1/+2 are answers newer than Zoho's refresh (Kvaternik also 146).
+- **Open: Videntis Zoho chart.** Ana's reading (all time 993 / 75.83, Sep 2026 31 / 51.61) equals Zoho's `JOINED_FINAL` table (995 scored; Sep 33 with 7 detractors) minus exactly 2 Sep 2026 detractors. The chart's filter can't be read with the Zamera token (error 8540). Ask Ana which chart she read.
+- **Open: Apolonija Sep 2026.** Ana reads 46 / 78.26 in Zoho; it was 47 on 17 Nov (1 promoter fewer). Not checked: Zoho returned "Access Denied" after a burst.
+
+**Production chain in Linear** (each blocked by the one before): COPS-333 ops sign off staging → DEV-185 load to production (description written 19 Nov) → DEV-319 Ana validates production against Zoho → COPS-338 ops validate production ("Legacy data OK on production" per Account).
+
+## Where we stopped (17 Nov 2026)
+
+Branch `fix/DEV-184-exclude-alchemer-deleted-responses` (from `main`; the DEV-184 branch was merged as PR #5 on 6 Nov 2026). Loads on staging are still the 3 Nov ones (Videntis 13087, Arcadia 13089, Apolonija 13091).
+
+**Karlo's answers in COPS-224 (16 Nov 2026):**
+
+| Item | Answer | Action |
+|---|---|---|
+| A1 Arcadia 93 reused ids | Wants a quick sync. Rule given: keep the detractor, else the one with a comment, discard the other. COPS-234 flowchart: no phone → discard, else keep only 1 copy | His rule picks between two responses, but each id has 1 response and 2 clinic rows; `status` and `sent_at` are empty on all 578 rows. **Ana decided (17 Nov):** keep one row per id, don't load the other (it stays in the clinic file). Kept: only row with a phone (20 answered, 56 unanswered); answered with two phones: row closest in time (73, estimated); else the first row (140). Linked 1,072 (was 979). Built, mock test, staging rerun pending. Tell Karlo at the sync |
+| A2 Apolonija 44 sguid space/text | Confirm | none |
+| A3 Apolonija 127, 300 | Should not count; no response Deleted in Alchemer should be shown anywhere | **Done in the load file (17 Nov):** both re-checked as Deleted in Alchemer; builder option `alchemer_deleted`; Apolonija links 1,515 (was 1,517). Staging rerun pending. "Anywhere" = dev ticket for all Accounts (resync deletions) |
+| A4 late answers 647, 1964, 1261 | Confirm | none |
+| A5 Videntis 3 unscored | Confirm | none |
+| A6 estimated sends and delivery | Confirm | none |
+| B1 Apolonija 136 Zoho join drop | Include them in Clinicdash | none: Clinicdash already shows them |
+| B2 Apolonija 2073 second answer | No | none (default) |
+| B3 Arcadia 2267 stored twice | Ok | dev ticket (below) |
+| C1 sign-off | Box ticked, no written "Legacy data OK for production" per Account | **Open:** ask Karlo for the written line per Account |
+
+Projected after the changes (real responses, projected totals): Apolonija Clinicdash after load 2,652 (was 2,654); legacy NPS still 83.6 (127 and 300 were both promoters). Arcadia adds 1,072 legacy responses (was 979), so the gap to Zoho closes by the 93 reused-id responses.
+
+**Zoho vs Clinicdash before production (17 Nov 2026).** Six Accounts, three checkpoints each (all-time total, one legacy month, Sep 2026): 13 match exactly, 5 differ with a named reason, 0 unexplained. Workbook `out/preprod/Zoho_vs_Clinicdash_2026-11-17.xlsx` (git-ignored), built by `tools/preprod/build_zoho_clinicdash_check.py`. Zoho = the Account's Joined table (real); Clinicdash after the load = prod today (real) + the responses the load links (projected).
+- Apolonija +181: 44 survey link ids with a space or text (Zoho misses them), 136 dropped by Zoho's JOINED in Mar-Aug 2026, 1 newer than Zoho's refresh.
+- Kvaternik +3: response 146 is Deleted and Clinicdash counts Deleted responses (exists on prod today; the only one in the six Accounts; dev ticket), 2 newer than Zoho's refresh. Mazalin +6: newer than Zoho's refresh.
+- Arcadia: Zoho's table lists the 93 reused-id responses twice. If its charts count rows, Zoho shows up to 94 more than Clinicdash; Ana checks Aug 2023 by hand (116 = rows, 73 = responses).
+- Checked by hand 17 Nov 2026 (Ana): Zoho matches the workbook for all six Accounts; Clinicdash staging General dashboard Arcadia Aug 2023 = 73 / NPS 91.8 as projected. Zoho Pages embedded in Clinicdash show Zoho's numbers (116), not ours. Decisions: Zoho is not changed; legacy months get no Comment Sentiment (not run on legacy comments).
+- Clinicdash (InsiderCX code): months in the Clinicdash User's time zone; NPS Trends joins Visit Msg and Patient Visit by the Visit Msg's Account. Checked on staging: every linked legacy response has both, in the right Account.
+
+**Open, in order:**
+1. ~~Staging reruns~~ **done 17 Nov 2026**: Arcadia batch 13101 (1,072 linked), Apolonija batch 13103 (1,515 linked); both validated, exports identical, run files `accounts/<account>/runs/2026-11-17_staging.md`.
+2. Ana validates by hand: Linear **DEV-312** (workbook attached). Then ops sign off in **COPS-333** (blocked by DEV-312, unassigned until Ana assigns it to Karlo): "Legacy data OK for production" per Account. PR #6 is open for review.
+3. DEV-232 (later, own branch): apply Karlo's COPS-234 answers of 9 Nov (link where there is visit data, Optical repeated ids per his marked file, discard the 32 Optical responses without an invite). Needs his marked file.
+4. Items 4–7 of the 4 Nov list below are unchanged (faster `99_rollback.sql` and `PRODUCTION.md`; dev ticket for Arcadia 2267 and Alchemer deletions, now covering Karlo's "not shown anywhere"; C04–C06 with the clinic; drop staging tables after sign-off).
+
 ## Where we stopped (4 Nov 2026, end of day)
 
 Branch `feat/DEV-184-validate-legacy-data-staging` (pushed, no PR yet). DEV-162 work is merged (PRs #2, #3). Staging password rotated 4 Nov 2026; connection verified read-only. Loads still on staging: Videntis 13087, Arcadia 13089, Apolonija 13091.

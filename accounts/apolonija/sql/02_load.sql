@@ -1,7 +1,7 @@
 -- Stomatološka poliklinika Apolonija legacy import (APOLONIJA_LEGACY_V1). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.
 -- Part 2: the load. Requires 01_before_import.sql, and apolonija_full_v1.csv imported into public.stg_apolonija_full (all columns TEXT).
 -- Creates: Patients that don't exist yet (existing Patients are never changed); 30899 legacy Patient Visits
--- (never surveyed); 1 mock sending batch with 10516 legacy invites; links 1517 legacy Survey Responses;
+-- (never surveyed); 1 mock sending batch with 10516 legacy invites; links 1515 legacy Survey Responses;
 -- stores all 67895 source rows untouched in legacy_source_row. Platform rows (11420) are only linked, never created.
 -- Run the WHOLE file. Check the GUI's commit mode first. On any error: run ROLLBACK; and send the message.
 
@@ -108,7 +108,7 @@ DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg s JOIN public.survey_response sr
      ON sr."surveyId" = (SELECT survey_id FROM cfg) AND sr.sguid = s.link_sguid AND sr.visit_msg_id IS NULL
      WHERE s.has_response;
-    IF n <> 1517 THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected 1517 (staging older than prod?)', n; END IF;
+    IF n <> 1515 THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected 1515 (staging older than prod?)', n; END IF;
 END $$;
 
 UPDATE stg SET visit_msg_id = uuid_generate_v5('c41f9e2b-7d58-4a36-b0e1-5a8c2d6f9e03'::uuid, 'apolonija-legacy-' || row_no) WHERE row_kind = 'legacy_invite';
@@ -272,7 +272,7 @@ DO $$ DECLARE n int; c record; b int; BEGIN
   SELECT count(*) INTO n FROM public.patient_visit_param WHERE patient_visit_id IN (SELECT pv_id FROM stg WHERE is_legacy);
     IF n <> 30899 THEN RAISE EXCEPTION 'params %', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
-    WHERE vm.sending_batch_id = b;                                           IF n <> 1517 THEN RAISE EXCEPTION 'linked responses %, expected 1517', n; END IF;
+    WHERE vm.sending_batch_id = b;                                           IF n <> 1515 THEN RAISE EXCEPTION 'linked responses %, expected 1515', n; END IF;
   SELECT count(*) INTO n FROM public.survey_response sr JOIN public.visit_msg vm ON vm.id = sr.visit_msg_id
     WHERE vm.sending_batch_id = b AND sr.status = 'Deleted';                 IF n > 0 THEN RAISE EXCEPTION 'Deleted responses linked %', n; END IF;
   SELECT count(*) INTO n FROM public.legacy_source_row WHERE account_id = c.account_id AND source_file = c.source_file;

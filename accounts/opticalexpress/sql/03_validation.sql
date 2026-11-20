@@ -1,7 +1,7 @@
 -- Optical Express legacy import (OPTICALEXPRESS_LEGACY_V1). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.
 -- Part 3: validation (read-only). Run each query on its own.
 
--- 1) Summary: expect 7931 source rows, 3968 legacy visits, 3966 invites, 0 linked,
+-- 1) Summary: expect 7903 source rows, 4053 legacy visits, 4051 invites, 634 linked,
 --    0 existing Patients changed, 0 legacy rows without Patient, 0 Deleted responses linked
 WITH r AS (SELECT * FROM legacy_source_row WHERE source_file = 'Pacijenti_joined_OpticalExpress.csv'
              AND account_id = (SELECT "accountId" FROM survey WHERE "alchemerId"::text = '90535032')),
@@ -42,20 +42,5 @@ SELECT count(*) AS responses,
 FROM survey_response sr
 JOIN visit_msg vm ON vm.id = sr.visit_msg_id
 WHERE vm.sending_batch_id IN (SELECT sending_batch_id FROM legacy_sending_batch WHERE code = 'OPTICALEXPRESS_LEGACY_V1') AND sr."NPS_SCORE" BETWEEN 0 AND 10;
-
--- 4) Not linked (link_responses false): what each legacy quarter WOULD show if ops decide to link (ESTIMATED sends,
---    real responses matched by sguid = the clinic id). Expect 634 responses in total; linked_now must be 0.
-SELECT date_trunc('quarter', vm.sent_at AT TIME ZONE 'Europe/Zagreb')::date AS quarter,
-       count(*) AS sent,
-       count(*) FILTER (WHERE vm.status = 'DELIVERED') AS delivered,
-       count(sr.id) AS responses_if_linked,
-       floor(1000.0 * count(sr.id) / NULLIF(count(*) FILTER (WHERE vm.status = 'DELIVERED'), 0) + 0.5) / 10 AS response_rate_if_linked,
-       count(sr.id) FILTER (WHERE sr.visit_msg_id IS NOT NULL) AS linked_now
-FROM legacy_source_row r
-JOIN visit_msg vm ON vm.id = r.visit_msg_id AND vm.sending_batch_id IN (SELECT sending_batch_id FROM legacy_sending_batch WHERE code = 'OPTICALEXPRESS_LEGACY_V1')
-LEFT JOIN survey_response sr ON sr."surveyId" = (SELECT id FROM survey WHERE "alchemerId"::text = '90535032')
-  AND btrim(sr.sguid) = btrim(r.raw->>'id') AND sr.status <> 'Deleted' AND NOT coalesce(sr."isTestData", false)
-WHERE r.source_file = 'Pacijenti_joined_OpticalExpress.csv'
-GROUP BY 1 ORDER BY 1;
 
 -- When satisfied: DROP TABLE public.stg_opticalexpress_full;   -- contains PII
