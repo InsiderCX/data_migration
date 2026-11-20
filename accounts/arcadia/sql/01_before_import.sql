@@ -112,7 +112,7 @@ SELECT to_regclass('public.legacy_sending_batch') AS t1,
        to_regclass('public.stg_arcadia_full')                  AS staging,
        (SELECT count(*) FROM public.stg_arcadia_full)          AS staging_rows;
 
--- After the GUI import, run this on its own. Expect 13595 / 6497 / 5255 / 1843 / 0
+-- After the GUI import, run this on its own. Expect 13306 / 6497 / 5097 / 1712 / 0
 -- SELECT count(*) AS total, count(*) FILTER (WHERE row_kind = 'platform') AS platform,
 --        count(*) FILTER (WHERE row_kind = 'legacy_invite') AS legacy_invite, count(*) FILTER (WHERE row_kind = 'legacy_visit') AS legacy_visit,
 --        count(*) FILTER (WHERE row_kind = 'legacy_raw') AS legacy_raw

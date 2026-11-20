@@ -1,7 +1,7 @@
 -- Arcadia legacy import (ARCADIA_LEGACY_V1). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.
 -- Part 3: validation (read-only). Run each query on its own.
 
--- 1) Summary: expect 13595 source rows, 7098 legacy visits, 5255 invites, 979 linked,
+-- 1) Summary: expect 13306 source rows, 6809 legacy visits, 5097 invites, 1072 linked,
 --    0 existing Patients changed, 0 legacy rows without Patient, 0 Deleted responses linked
 WITH r AS (SELECT * FROM legacy_source_row WHERE source_file = 'Pacijenti_Joined_Arcadia.csv'
              AND account_id = (SELECT "accountId" FROM survey WHERE "alchemerId"::text = '90534273')),

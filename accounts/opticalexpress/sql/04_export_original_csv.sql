@@ -1,5 +1,5 @@
 -- Optical Express legacy import (OPTICALEXPRESS_LEGACY_V1). Rendered by tools/render_legacy_sql.py from sql_config.json - do not edit by hand.
--- Re-create Pacijenti_joined_OpticalExpress.csv (same 7931 rows, order, columns and values).
+-- Re-create Pacijenti_joined_OpticalExpress.csv (same 7903 rows, order, columns and values).
 -- Export the result as CSV (comma, header on, UTF-8). Contains Patient PII - handle like the original file.
 -- Compare by value with the clinic file: some values are quoted in the original where no quotes are needed, and the
 -- export tool decides its own quoting, so a byte compare can differ while every value is identical.
