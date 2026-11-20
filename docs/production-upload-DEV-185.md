@@ -12,7 +12,7 @@ Ana runs it in a GUI SQL client on EU prod, one Account at a time, smallest firs
 
 | Step | Script | What it does |
 |---|---|---|
-| 1 | `accounts/<account>/sql/01_before_import.sql` | Guards; makes sure the legacy tables and the trigger fallback exist; creates an empty staging table |
+| 1 | `production/DEV-185/<n>_<account>/01_before_import.sql` | Guards; makes sure the legacy tables and the trigger fallback exist; creates an empty staging table |
 | 2 | GUI import | The load file goes into the staging table (all columns text) |
 | 3 | `02_load.sql` | The load: **one transaction**, checks before and after writing; any failed check rolls everything back |
 | 4 | `03_validation.sql` | Read-only checks |
@@ -69,7 +69,7 @@ Counts from the load files and the staging runs of 17 Nov 2026 (real on staging)
 
 ## What to look at in review
 
-The scripts that run on production are `accounts/<account>/sql/` for the six Accounts, already on `main` (merged with the staging work in PR #6, byte-identical to what passed staging on 17 Nov 2026). The PR diff therefore shows only this doc. Review the script files themselves.
+The scripts that run on production are in `production/DEV-185/`, one folder per Account, numbered in run order. They are copies of `accounts/<account>/sql/` (byte-identical to what passed the mock tests and staging on 17 Nov 2026); `SHA256SUMS` holds their hashes. Ana runs these files and no others. Before the session, check them with `cd production/DEV-185 && shasum -a 256 -c SHA256SUMS`, and that they still equal `accounts/<account>/sql/`.
 
 1. `02_load.sql` of one Account end to end (Kvaternik is short). The other five come from the same template; they differ only by the Account's settings (ids, names, expected counts, linking options).
 2. The guards: wrong database or Account, load already present, staging table missing or type-converted by the GUI, expected counts.
