@@ -1,6 +1,6 @@
 # Production run: Kvaternik legacy import
 
-> **Not started. Production waits for the ops sign-off** (COPS ticket from DEV-232, item C1) and for the answers that change the load (A1 link?, A2 repeated ids, A3 missing invites, A6 other rows). Until then nothing is written to production.
+> **Done on 23 Nov 2026** (DEV-185, with the linking ops decided in COPS-234): see [`runs/2026-11-23_production.md`](runs/2026-11-23_production.md) for results and open items. Ran from the frozen scripts in `production/DEV-185/`, not from `sql/`. The expected numbers below are from the 6 Nov plan (append only) and are superseded by the run log.
 
 Same flow as Videntis, Arcadia and Apolonija; SIE's 28 Oct 2026 run log (`accounts/sie/runs/2026-10-28_production.md`) is the worked example. Plan: [`docs/plans/2026-11-06_kvaternik-mazalin-opticalexpress.md`](../../docs/plans/2026-11-06_kvaternik-mazalin-opticalexpress.md).
 

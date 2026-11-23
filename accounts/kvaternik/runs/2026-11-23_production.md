@@ -1,0 +1,57 @@
+# Kvaternik production run, 23 Nov 2026
+
+Run log of the `KVATERNIK_LEGACY_V1` load on **EU production** (`insider-prod`), part of DEV-185 (all six legacy Accounts in one session). Ana ran every step in Beekeeper Studio. Claude read only the prod replica (Zamera) and the files Ana exported. Scripts: the frozen copies in `production/DEV-185/`, checked against `SHA256SUMS` before each copy. Session run sheet: `docs/production-run-2026-11-23.md`.
+
+- Load file: `data/kvaternik_full_v1.csv`, SHA-256 `be1e9022de0a4c077b59a4ad4c111276a881fcc7721d88d10a44b1ddedbbfb79` (same as the Account card and the 17 Nov staging run).
+- Ops sign-off of staging: COPS-333 (Karlo, "Ready for production - all accounts").
+
+## Steps
+
+| # | Step | Who | Result | Check |
+|---|---|---|---|---|
+| 0 | `00_preflight.sql` (read-only) | Ana | `insider-prod`, Account ok, 2 Locations; 727 new Visit Msg ids, none present; 132 unlinked legacy Survey Responses = expected; trigger unchanged | ✓ |
+| 1 | `01_before_import.sql` | Ana | `legacy_sending_batch / legacy_invite_map / legacy_source_row / stg_kvaternik_full / 0` | ✓ |
+| 2 | GUI import of `data/kvaternik_full_v1.csv` (Beekeeper) | Ana | — | — |
+| 3 | Count check | Ana | 8,407 / 7,680 / 727 / 0 / 0 (total / platform / invite / visit / raw) | ✓ |
+| 3b | Space check (were edge spaces kept?) | Ana | first import 0 / 0 (Beekeeper trimmed): table dropped, `01` again, re-imported with trimming off: **9 / 6** ✓ | ✓ |
+| 4 | `02_load.sql` | Ana | `KVATERNIK_LEGACY_V1`, batch **13483**, new Patients 675, 727 / 727 / **132** / 7,680 / 8,407 (legacy visits / invites / linked / platform rows linked / source rows) | ✓ |
+| 5 | `03_validation.sql`, query 1 | Claude on the replica | Same numbers as step 4; see Results | ✓ |
+| 6 | `04_export_original_csv.sql`, compared by value with the clinic file | Ana, Claude | Identical, 8,407 rows | ✓ |
+| 7 | `DROP TABLE public.stg_kvaternik_full;` | Ana | Replica: table gone | ✓ |
+
+## Results (prod replica, after the load)
+
+| Check | Value | Expected |
+|---|---|---|
+| Source rows stored | 8,407 | 8,407 ✓ |
+| Legacy Patient Visits / Survey Invites | 727 / 727 | ✓ |
+| Legacy Survey Responses linked | 132 | 132 ✓ |
+| Platform rows linked | 7,680 | = platform rows ✓ |
+| New Patients | 675 | ≤ 675 on staging ✓ (Patients created since the staging copy are reused) |
+| Existing Patients changed | **0** | 0 ✓ |
+| Legacy rows without a Patient | **0** | 0 ✓ |
+| Deleted Survey Responses linked | **0** | 0 ✓ |
+| Survey Responses still unlinked | 5 | not part of this load |
+
+**Legacy NPS (real):** 132 scored responses, 119 promoters, 6 detractors, **NPS 85.6**.
+**Legacy send dates (estimated):** 21 Feb 2024 (one estimated date for all). Sent, delivered and response rate for the legacy period are estimates; responses and NPS are real.
+
+**Clinicdash numbers (prod replica, 23 Nov 2026):** every month before November 2026 equals the 17 Nov projection that ops signed off in COPS-333; November 2026 differs only by Survey Responses that came in after 17 Nov.
+
+## Problems and fixes
+
+The first import still had "Automatically Trim Whitespace" ticked (the space check showed 0 / 0). The staging table was dropped and the file imported again with the option unticked. Nothing had been written to the platform at that point.
+
+## Identifiers on production (to find or undo this load)
+
+- Load code `KVATERNIK_LEGACY_V1`, `legacy_sending_batch.loaded_at` = 2026-11-23 10:14:17 UTC
+- Mock sending batch `visit_msg_sending_batch.id = 13483` (`trigger = 'legacy_import'`), Account 21, Alchemer survey 90677816
+- Patients created by the load: `patient.created = loaded_at` (675)
+- Source rows: `legacy_source_row.source_file = 'Pacijenti_joined_Kvaternik.csv'`
+- Undo (data only): `production/DEV-185/2_kvaternik/99_rollback.sql` (slow; locks `patient` / `patient_visit` while it runs)
+
+## Still open
+
+- [ ] Ops validate production and sign off: COPS-338 (Karlo)
+- [ ] With COPS-338: tell the CSM that legacy message figures (sent, delivered, response rate) are estimates; responses and NPS are real
+- [ ] After COPS-338: delete the local clinic files, load file and exports (`data/`, `out/`, `~/Downloads/export_prod_*`)
