@@ -71,3 +71,35 @@ Linear: Orto-Nova [DEV-406](https://linear.app/insidercx/issue/DEV-406) build �
 - Step 5, EU staging: Claude runs `tools/run_staging.sh` with Ana's permission for staging only (25 Nov, over her VPN). Colić done (batch 13111). Orto-Nova and Affidea running.
 - Found on staging: Orto-Nova's legacy scores on the staging copy differ from prod (about 620 score 5 on staging, mostly 10 on prod). Staging NPS for Orto-Nova is not meaningful; counts are.
 - Found on staging: `99_rollback` is slow because `legacy_source_row` (visit_msg_id, patient_visit_id, patient_id) and `legacy_invite_map` (visit_msg_id) have no index. Colić 14 min; Orto-Nova and Affidea hours. Matters for production (rollback plan).
+
+## Where we stopped (25 Nov 2026, ~15:45) — start here on 26 Nov
+
+Branch `feat/DEV-375-legacy-import-next-three`, **PR #11** open (assigned to Ana). Everything below is committed there.
+
+**Done**
+- All three Accounts built and mock-tested (ALL CHECKS PASSED); the six done Accounts still rebuild byte-identical.
+- Alchemer and Zoho comparison: no unexplained difference (`docs/validation/2026-11-25_alchemer_zoho_dev375.md`).
+- **Bolnica Colić on EU staging: done.** Final batch **13111**, 720 linked, export identical, rollback tested (14 min). Run log `accounts/bolnicacolic/runs/2026-11-25_staging.md`.
+- DEV-412 (Ana's manual check) created and filled; Karlo's questions and the build's assumptions are in DEV-377 / DEV-408 / DEV-409.
+
+**Running when we stopped: Orto-Nova on EU staging**
+- Steps 1–6 passed: batch **13112**, 25,839 invites, **1,995 linked**, 25,663 new Patients, 0 existing Patients changed, export identical (log copy: `accounts/ortonova/out/stg_run_2026-11-25_partial.log`, git-ignored).
+- Step 7 (`99_rollback`) was still running at 15:45 (Visit Msgs deleted, Patient Visits in progress; estimate end ~17:15–17:30), then step 8 reloads.
+- It ends safely either way: if Ana's VPN dropped, the rollback transaction is undone and Orto-Nova **stays loaded as batch 13112**. If it finished, Orto-Nova is loaded again under a new batch id.
+
+**Tomorrow, in this order**
+1. VPN on. Read-only check of Orto-Nova on staging: `SELECT sending_batch_id, loaded_at FROM legacy_sending_batch WHERE code = 'ORTONOVA_LEGACY_V1';` (expect exactly 1 row), plus `03` query 1 (expect 35,557 / 25,839 / 25,839 / 1,995 / 0 deleted / 0 changed / 0 without Patient). Note whether the rollback test completed.
+2. Write `accounts/ortonova/runs/2026-11-25_staging.md` (results above; staging scores for Orto-Nova differ from prod, see below).
+3. **Affidea staging run**: `bash tools/run_staging.sh affidea Pacijenti_JOINED_Affidea.csv`. Load and checks take minutes; the rollback test takes hours (no index, below). Ana decides: run the rollback test at a quiet time, or skip step 7 for Affidea (proven in the mock test). Check Affidea's staging scores against prod too.
+4. Update DEV-412 with the Orto-Nova and Affidea staging numbers; commit run logs to PR #11. Then Ana does DEV-412; after it, the ops validation goes to Karlo (COPS task by Ana).
+
+**Known issues found on 25 Nov**
+- **Orto-Nova scores on staging are wrong** (about 620 legacy responses have score 5 on staging, mostly 10 on prod). Staging NPS ~15, prod/Zoho 84–90. Counts are right. Written in DEV-412.
+- **Slow rollback:** `legacy_source_row` (`visit_msg_id`, `patient_visit_id`, `patient_id`) and `legacy_invite_map.visit_msg_id` have no index, so `99` scans them per deleted row (Colić 14 min, Orto-Nova ~2.5 h, Affidea est. 3.5–4 h). Matters for the production rollback plan. Possible dev ticket (indexes); Ana decides.
+- **Staging schema change by the app:** from 14:14 the staging app user (`app_platform_stg`) kept trying `ALTER TABLE account ADD COLUMN manual_patient_tickets_enabled`, blocked by 17 sessions of two personal DB users. Not caused by our run. Ana: no ALTER TABLE should be done there; raise with the team.
+- `tools/run_staging.sh` puts the staging password on the `psql` command line (visible in a process list). Fix with `~/.pgpass`; not changed yet.
+- Lesson: a wait loop with `pgrep -f "<text>"` matches its own command line; wait on a PID instead.
+
+**Later**
+- `PRODUCTION.md` for each Account (DEV-378 / DEV-410 / DEV-411), including the rollback-time decision.
+- Karlo's answers may change the builds (rebuild + staging rerun).
