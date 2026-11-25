@@ -1,0 +1,53 @@
+{
+  "slug": "ortonova",
+  "load_file": "ortonova_full_v1.csv",
+  "staging_table": "stg_ortonova_full",
+  "raw_columns": [
+    "id",
+    "sent_at",
+    "location",
+    "first_name",
+    "last_name",
+    "source_id",
+    "phone",
+    "lead_source",
+    "year_of_birth",
+    "gender_code",
+    "country_code",
+    "language_code",
+    "visit_date",
+    "procedure",
+    "comment",
+    "doctor",
+    "status",
+    "p"
+  ],
+  "code": "ORTONOVA_LEGACY_V1",
+  "account_name": "Orto-Nova",
+  "alchemer_id": "90492015",
+  "extra_alchemer_ids": [
+    "90509784",
+    "90509787"
+  ],
+  "account_id_prod": 49,
+  "source_file": "Pacijenti_Joined_OrtoNova.csv",
+  "survey_file": "Survey_responses_OrtoNova.csv",
+  "platform_start": "2025-05-19",
+  "n_locations": 1,
+  "uuid_ns": "5db4a9f1-8eea-493f-bbac-98cd6b113f64",
+  "period": "Nov 2022 - May 2025 invites (three Surveys: HR, IT, SLO)",
+  "estimated": "send dates (per invite type, isotonic fit of id to response time; 15:00 Zagreb), visit dates (send - 27 h), delivery status (94.1 %, answered = DELIVERED). The legacy rows have no date, phone or source id; one new Patient per row",
+  "layout": 2,
+  "link_responses": true,
+  "expect": {
+    "rows": 35557,
+    "platform": 9718,
+    "legacy_invite": 25839,
+    "legacy_visit": 0,
+    "legacy_raw": 0,
+    "linked": 1995,
+    "mapped_link": 1995,
+    "reused_invites": 0,
+    "legacy_no_phone": 25180
+  }
+}
