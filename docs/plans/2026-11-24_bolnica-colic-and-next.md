@@ -51,3 +51,23 @@ Karlo's note: the patient file still has the **old table structure**; convert it
 - Claude reads the prod replicas only and never writes to a database. Ana runs every write in Beekeeper. Permission to write to staging (DEV-232) does not carry over: ask again.
 - No patient data in git or in the conversation: aggregates and ids only.
 - Git: one branch per sub-issue, Conventional Commits with `refs DEV-xxx`, PR template, merge commits only, no AI attribution lines.
+
+## The next two Accounts: Orto-Nova and Affidea (files from Karlo, 24 Nov 2026)
+
+Linear: Orto-Nova [DEV-406](https://linear.app/insidercx/issue/DEV-406) build → [DEV-408](https://linear.app/insidercx/issue/DEV-408) staging → [DEV-410](https://linear.app/insidercx/issue/DEV-410) production; Affidea [DEV-407](https://linear.app/insidercx/issue/DEV-407) → [DEV-409](https://linear.app/insidercx/issue/DEV-409) → [DEV-411](https://linear.app/insidercx/issue/DEV-411). Ana's manual check of all three: [DEV-412](https://linear.app/insidercx/issue/DEV-412), then the ops validation goes to Karlo (COPS task by Ana).
+
+| | Orto-Nova | Affidea |
+|---|---|---|
+| Account / Locations / Surveys (EU prod) | 49 / 1 / **three** (90492015 HR, 90509784 IT, 90509787 SLO) | 27 / 4 (Čavka, Kalajžić, Sv. Rok, Vita) / 90540487 |
+| Legacy rows | 25,839, no date, phone or source id; id = invite type digit + counter | 36,437, real SMS status (`GROUP_NAME`), no dates |
+| Linked responses | 1,995 | 7,628 (3,532 more point to invites missing from the file) |
+| Details | [`accounts/ortonova/README.md`](../../accounts/ortonova/README.md) | [`accounts/affidea/README.md`](../../accounts/affidea/README.md) |
+
+## Status (25 Nov 2026)
+
+- Steps 0–4 done for all three Accounts: discovery, account cards, Colić conversion, load files, mock tests (ALL CHECKS PASSED). PR #11.
+- Ana (25 Nov): build without waiting for Karlo; his questions and the assumptions the build makes are in DEV-377, DEV-408, DEV-409, to confirm during validation.
+- Builder and SQL got opt-in options (one id sequence, every legacy row sent, age at the visit, `GROUP_NAME` status, send date from the own response, rate tolerance, more Surveys per Account). The six done Accounts rebuild byte-identical and still pass their mock tests.
+- Step 5, EU staging: Claude runs `tools/run_staging.sh` with Ana's permission for staging only (25 Nov, over her VPN). Colić done (batch 13111). Orto-Nova and Affidea running.
+- Found on staging: Orto-Nova's legacy scores on the staging copy differ from prod (about 620 score 5 on staging, mostly 10 on prod). Staging NPS for Orto-Nova is not meaningful; counts are.
+- Found on staging: `99_rollback` is slow because `legacy_source_row` (visit_msg_id, patient_visit_id, patient_id) and `legacy_invite_map` (visit_msg_id) have no index. Colić 14 min; Orto-Nova and Affidea hours. Matters for production (rollback plan).
