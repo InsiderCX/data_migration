@@ -29,6 +29,8 @@ Linked responses: anchors that are not Deleted (decision 12), in the DB or in Al
 link_sguid is the sguid exactly as Alchemer stores it.
 DEV-232 options (CONFIG keys, see the code): layout, platform_rule, scheme_rule, send_rule, visit_rule, invite_rule,
 status_rule, reused_rule. Left out, each keeps the DEV-162 behaviour above.
+DEV-375 options: scheme_rule "single", invite_rule "all_rows", yob_rule "visit_minus_age", status_prefix, anchor_send,
+rate_tolerance. Left out, each keeps the behaviour above.
 """
 # ---------------------------------------------------------------- CONFIG (Videntis, EU Account 38)
 CONFIG = dict(
@@ -67,6 +69,10 @@ STATUS_RULE = CONFIG.get("status_rule", "estimate")  # "file": the file's SMS st
 REUSED_RULE = CONFIG.get("reused_rule", "keep")    # "raw_only": rows on repeated ids are stored as source rows only;
                                                   # "pick": one row per repeated id is kept, the others are not loaded;
                                                   # "flowchart": rows without phone or SMS status are not loaded
+# Options added for DEV-375 (Bolnica Colić, Orto-Nova, Affidea); the defaults keep the behaviour above
+STATUS_PREFIX = CONFIG.get("status_prefix", False)  # True: file status is GROUP_NAME (e.g. DELIVERED_TO_HANDSET), group = before "_"
+ANCHOR_SEND = CONFIG.get("anchor_send", "fit")      # "response": an answered row is sent send_to_response_h before its response
+RATE_TOLERANCE = CONFIG.get("rate_tolerance", 5)    # allowed points between the legacy and the platform response rate
 FILE_STATUS = {"DELIVERED": "DELIVERED", "UNDELIVERABLE": "UNDELIVERABLE", "UNDELIVERED": "UNDELIVERABLE",
                "EXPIRED": "EXPIRED", "REJECTED": "REJECTED", "PENDING": "PENDING"}
 
@@ -114,6 +120,8 @@ def scheme(i):
     m = re.fullmatch(r"([a-z]+)(\d+)", i, re.I)
     if m:
         return m.group(1).lower(), int(m.group(2))
+    if SCHEME_RULE == "single" and i.isdigit():  # one numeric sequence for the whole file
+        return "all", int(i)
     if SCHEME_RULE == "len_prefix" and i.isdigit():
         return (f"len{len(i)}" if len(i) <= 3 else f"len{len(i)}:{i[:2]}"), int(i)
     if i.isdigit() and len(i) > 2:
@@ -200,7 +208,9 @@ else:
         day = day + pd.to_timedelta((7 - day.dt.dayofweek).where(day.dt.dayofweek >= 5, 0), unit="D")  # weekend -> Monday
         leg.loc[g.index, "sent"] = (day + pd.Timedelta(hours=h, minutes=m)).dt.tz_convert("UTC")
 leg["sent"] = pd.to_datetime(leg.sent, utc=True)
-cap = leg.resp_start - pd.Timedelta(minutes=2)
+if ANCHOR_SEND == "response":  # answered rows: their own response gives the send date (others stay interpolated)
+    leg.loc[leg.anchor, "sent"] = (leg.resp_start - pd.Timedelta(hours=CONFIG["send_to_response_h"])).dt.floor("min")
+cap =leg.resp_start - pd.Timedelta(minutes=2)
 over = leg.anchor & (leg.sent > cap)
 leg.loc[over, "sent"] = cap[over]
 
@@ -220,6 +230,11 @@ if CONFIG["yob_rule"] == "2026_minus_age":
     age = pd.to_numeric(leg.age, errors="coerce")
     leg["yob_out"] = (2026 - age).astype("Int64").astype(str).replace("<NA>", "")
     age_at_visit = visit_local.dt.year - (2026 - age)
+elif CONFIG["yob_rule"] == "visit_minus_age":  # file 'age' = age at the visit; 0 or empty -> no year of birth
+    age = pd.to_numeric(leg.age, errors="coerce")
+    age = age.where(age > 0)
+    leg["yob_out"] = (visit_local.dt.year - age).astype("Int64").astype(str).replace("<NA>", "")
+    age_at_visit = age
 elif CONFIG["yob_rule"] == "file":
     leg["yob_out"] = leg.year_of_birth.str.strip()
     age_at_visit = visit_local.dt.year - pd.to_numeric(leg.year_of_birth, errors="coerce")
@@ -239,6 +254,8 @@ if CONFIG["age_rule"] is not None:
 invited, last = pd.Series(False, index=leg.index), {}
 if INVITE_RULE == "all":  # the file lists sent messages; no phone -> invite only when a real response proves it
     invited = (leg.phone_clean != "") | leg.anchor
+elif INVITE_RULE == "all_rows":  # every legacy row has its own invite id, so every row was sent (phone or not)
+    invited = pd.Series(True, index=leg.index)
 else:
     for i in leg.sort_values(["visit_utc", "seq"]).index:
         ph, t = leg.at[i, "phone_clean"], leg.at[i, "visit_utc"]
@@ -258,6 +275,8 @@ linked = leg.anchor & (leg.resp_status != "Deleted")
 if STATUS_RULE == "file":
     # real status from the file; answered -> DELIVERED (a response proves delivery); empty -> estimated
     fs = leg.status.str.strip().str.upper()
+    if STATUS_PREFIX:
+        fs = fs.str.split("_").str[0]
     assert fs[invited].isin(set(FILE_STATUS) | {""}).all(), f"unknown SMS status {set(fs[invited]) - set(FILE_STATUS)}"
     leg["status_source"] = ""
     leg.loc[invited, "est_status"] = fs[invited].map(FILE_STATUS).fillna("")
@@ -345,4 +364,5 @@ if LAYOUT == 2:
     print("sends capped before their response", int((over & invited).sum()))
     rate = 100 * linked[invited].sum() / (inv.est_status == "DELIVERED").sum()
     print(f"legacy response rate if linked {rate:.1f} % | platform {CONFIG['platform_response_rate']} %")
-    assert abs(rate - CONFIG["platform_response_rate"]) <= 5, "legacy response rate more than 5 points from the platform"
+    assert abs(rate - CONFIG["platform_response_rate"]) <= RATE_TOLERANCE, \
+        f"legacy response rate more than {RATE_TOLERANCE} points from the platform"

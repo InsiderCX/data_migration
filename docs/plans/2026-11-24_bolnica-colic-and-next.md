@@ -51,3 +51,66 @@ Karlo's note: the patient file still has the **old table structure**; convert it
 - Claude reads the prod replicas only and never writes to a database. Ana runs every write in Beekeeper. Permission to write to staging (DEV-232) does not carry over: ask again.
 - No patient data in git or in the conversation: aggregates and ids only.
 - Git: one branch per sub-issue, Conventional Commits with `refs DEV-xxx`, PR template, merge commits only, no AI attribution lines.
+
+## The next two Accounts: Orto-Nova and Affidea (files from Karlo, 24 Nov 2026)
+
+Linear: Orto-Nova [DEV-406](https://linear.app/insidercx/issue/DEV-406) build → [DEV-408](https://linear.app/insidercx/issue/DEV-408) staging → [DEV-410](https://linear.app/insidercx/issue/DEV-410) production; Affidea [DEV-407](https://linear.app/insidercx/issue/DEV-407) → [DEV-409](https://linear.app/insidercx/issue/DEV-409) → [DEV-411](https://linear.app/insidercx/issue/DEV-411). Ana's manual check of all three: [DEV-412](https://linear.app/insidercx/issue/DEV-412), then the ops validation goes to Karlo (COPS task by Ana).
+
+| | Orto-Nova | Affidea |
+|---|---|---|
+| Account / Locations / Surveys (EU prod) | 49 / 1 / **three** (90492015 HR, 90509784 IT, 90509787 SLO) | 27 / 4 (Čavka, Kalajžić, Sv. Rok, Vita) / 90540487 |
+| Legacy rows | 25,839, no date, phone or source id; id = invite type digit + counter | 36,437, real SMS status (`GROUP_NAME`), no dates |
+| Linked responses | 1,995 | 7,628 (3,532 more point to invites missing from the file) |
+| Details | [`accounts/ortonova/README.md`](../../accounts/ortonova/README.md) | [`accounts/affidea/README.md`](../../accounts/affidea/README.md) |
+
+## Status (25 Nov 2026)
+
+- Steps 0–4 done for all three Accounts: discovery, account cards, Colić conversion, load files, mock tests (ALL CHECKS PASSED). PR #11.
+- Ana (25 Nov): build without waiting for Karlo; his questions and the assumptions the build makes are in DEV-377, DEV-408, DEV-409, to confirm during validation.
+- Builder and SQL got opt-in options (one id sequence, every legacy row sent, age at the visit, `GROUP_NAME` status, send date from the own response, rate tolerance, more Surveys per Account). The six done Accounts rebuild byte-identical and still pass their mock tests.
+- Step 5, EU staging: Claude runs `tools/run_staging.sh` with Ana's permission for staging only (25 Nov, over her VPN). Colić done (batch 13111). Orto-Nova loaded (batch 13112, rollback test did not finish). Affidea loaded 26 Nov (batch 13113, rollback test skipped with `STOP_AFTER=6`).
+- Found on staging: Orto-Nova's legacy scores on the staging copy differ from prod (about 620 score 5 on staging, mostly 10 on prod). Staging NPS for Orto-Nova is not meaningful; counts are.
+- Found on staging: `99_rollback` is slow because `legacy_source_row` (visit_msg_id, patient_visit_id, patient_id) and `legacy_invite_map` (visit_msg_id) have no index. Colić 14 min; Orto-Nova and Affidea hours. Matters for production (rollback plan).
+
+## Progress on 26 Nov 2026
+
+- Step 1: Orto-Nova on staging checked (read-only). One batch, **13112**, so the rollback test did not finish; the load is intact and `03` query 1 matches 25 Nov.
+- Step 2: run log `accounts/ortonova/runs/2026-11-25_staging.md`.
+- Step 3: Affidea on staging, steps 0–6 (`STOP_AFTER=6`, rollback test skipped): batch **13113**, 7,628 linked, export identical, legacy NPS 81.4; staging scores match prod. Run log `accounts/affidea/runs/2026-11-26_staging.md`.
+- Step 4: DEV-412 updated with both runs. Next: Ana does DEV-412, then the ops validation goes to Karlo.
+- **Order to production (Ana, 26 Nov):** 1. manual validation DEV-412 (Ana) → 2. ops validation (COPS task, Karlo) and his answers → 3. the decisions in the `PRODUCTION.md` drafts (rollback, Affidea split characters) → 4. production.
+- Still open: the rollback on staging for Orto-Nova and Affidea (mock test only). Ana decides before production.
+- **DEV-412 done (Ana, 26 Nov).** Record: `docs/validation/2026-11-26_manual_validation_dev412.md`. Colić 720 = Zoho 720 (Feb 2023 – Apr 2026); Orto-Nova Oct 2023 88 = 88; Affidea Zoho = load on 356 of 357 days (11 Mar 2024: response 7379). Message performance can't be compared with Zoho (estimated send date). Kalajžić Apr 2024 +1 on staging: response 8060 reopened 4 Nov 2026 (staging-only).
+- **Ops validation: COPS-383** (Karlo; COPS-234 layout, A1–A13 decisions, B1–B6 acknowledge, C1 sign-off). DEV-377 / DEV-408 / DEV-409 point there and are In Progress; builds DEV-376 / DEV-406 / DEV-407 Done.
+
+## Where we stopped (25 Nov 2026, ~15:45) — plan for 26 Nov
+
+Branch `feat/DEV-375-legacy-import-next-three`, **PR #11** open (assigned to Ana). Everything below is committed there.
+
+**Done**
+- All three Accounts built and mock-tested (ALL CHECKS PASSED); the six done Accounts still rebuild byte-identical.
+- Alchemer and Zoho comparison: no unexplained difference (`docs/validation/2026-11-25_alchemer_zoho_dev375.md`).
+- **Bolnica Colić on EU staging: done.** Final batch **13111**, 720 linked, export identical, rollback tested (14 min). Run log `accounts/bolnicacolic/runs/2026-11-25_staging.md`.
+- DEV-412 (Ana's manual check) created and filled; Karlo's questions and the build's assumptions are in DEV-377 / DEV-408 / DEV-409.
+
+**Running when we stopped: Orto-Nova on EU staging**
+- Steps 1–6 passed: batch **13112**, 25,839 invites, **1,995 linked**, 25,663 new Patients, 0 existing Patients changed, export identical (log copy: `accounts/ortonova/out/stg_run_2026-11-25_partial.log`, git-ignored).
+- Step 7 (`99_rollback`) was still running at 15:45 (Visit Msgs deleted, Patient Visits in progress; estimate end ~17:15–17:30), then step 8 reloads.
+- It ends safely either way: if Ana's VPN dropped, the rollback transaction is undone and Orto-Nova **stays loaded as batch 13112**. If it finished, Orto-Nova is loaded again under a new batch id.
+
+**Tomorrow, in this order**
+1. VPN on. Read-only check of Orto-Nova on staging: `SELECT sending_batch_id, loaded_at FROM legacy_sending_batch WHERE code = 'ORTONOVA_LEGACY_V1';` (expect exactly 1 row), plus `03` query 1 (expect 35,557 / 25,839 / 25,839 / 1,995 / 0 deleted / 0 changed / 0 without Patient). Note whether the rollback test completed.
+2. Write `accounts/ortonova/runs/2026-11-25_staging.md` (results above; staging scores for Orto-Nova differ from prod, see below).
+3. **Affidea staging run**: `bash tools/run_staging.sh affidea Pacijenti_JOINED_Affidea.csv`. Load and checks take minutes; the rollback test takes hours (no index, below). Ana decides: run the rollback test at a quiet time, or skip step 7 for Affidea (proven in the mock test). Check Affidea's staging scores against prod too.
+4. Update DEV-412 with the Orto-Nova and Affidea staging numbers; commit run logs to PR #11. Then Ana does DEV-412; after it, the ops validation goes to Karlo (COPS task by Ana).
+
+**Known issues found on 25 Nov**
+- **Orto-Nova scores on staging are wrong** (about 620 legacy responses have score 5 on staging, mostly 10 on prod). Staging NPS ~15, prod/Zoho 84–90. Counts are right. Written in DEV-412.
+- **Slow rollback:** `legacy_source_row` (`visit_msg_id`, `patient_visit_id`, `patient_id`) and `legacy_invite_map.visit_msg_id` have no index, so `99` scans them per deleted row (Colić 14 min, Orto-Nova ~2.5 h, Affidea est. 3.5–4 h). Matters for the production rollback plan. Possible dev ticket (indexes); Ana decides.
+- **Staging schema change by the app:** from 14:14 the staging app user (`app_platform_stg`) kept trying `ALTER TABLE account ADD COLUMN manual_patient_tickets_enabled`, blocked by 17 sessions of two personal DB users. Not caused by our run. Ana: no ALTER TABLE should be done there; raise with the team.
+- `tools/run_staging.sh` puts the staging password on the `psql` command line (visible in a process list). Fix with `~/.pgpass`; not changed yet.
+- Lesson: a wait loop with `pgrep -f "<text>"` matches its own command line; wait on a PID instead.
+
+**Later**
+- `PRODUCTION.md` for each Account (DEV-378 / DEV-410 / DEV-411): **drafted 26 Nov**. Open decisions in them: rollback (Orto-Nova, Affidea: indexes first or accept the risk) and Affidea's 7 split characters (import with `psql \copy`, or Beekeeper plus a `05` fix).
+- Karlo's answers may change the builds (rebuild + staging rerun).

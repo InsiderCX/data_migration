@@ -11,6 +11,7 @@ Written for the Videntis / Arcadia / Apolonija imports (DEV-162). SIE's hand-wri
 DEV-232 config keys (left out = DEV-162 SQL, unchanged): "layout": 2 (real SMS statuses, status_source in meta,
 language_out, Location per row by name), "link_responses": false (append only: no legacy_invite_map rows, responses
 untouched), "n_locations", "uuid_legacy_ids": true (legacy Visit Msgs keep the uuid survey link id as their id).
+DEV-375 config key: "extra_alchemer_ids": [...] (the Account's other Surveys; responses on any of them are linked).
 """
 import json
 import pathlib
@@ -74,6 +75,17 @@ SMS_NAME = ("CASE s.est_status WHEN 'DELIVERED' THEN 'DELIVERED_TO_HANDSET' WHEN
             if V2 else "CASE s.est_status WHEN 'DELIVERED' THEN 'DELIVERED_TO_HANDSET' ELSE 'UNDELIVERABLE_NOT_DELIVERED' END")
 COUNTRY = ("(SELECT co.code FROM public.country co WHERE co.code = s.country_out)" if V2 else
            "CASE upper(btrim(s.raw_country_code)) WHEN '' THEN NULL WHEN 'ROM' THEN 'ROU' ELSE left(upper(btrim(s.raw_country_code)), 3) END")
+# "extra_alchemer_ids" (DEV-375, Orto-Nova): the Account has more Surveys; alchemer_id stays the one that resolves it
+EXTRA = C.get("extra_alchemer_ids", [])
+ALL_AL = ", ".join(q(a) for a in [AL] + EXTRA)
+CFG_SURVEYS = (f""",
+       ARRAY(SELECT s2.id FROM public.survey s2 WHERE s2."alchemerId"::text IN ({ALL_AL}) ORDER BY s2.id) AS survey_ids""" if EXTRA else "")
+CFG_SURVEY_CHECK = (f"""
+  IF cardinality(c.survey_ids) <> {1 + len(EXTRA)} OR EXISTS (SELECT 1 FROM public.survey s2 WHERE s2.id = ANY(c.survey_ids)
+     AND s2."accountId" <> c.account_id) THEN RAISE EXCEPTION 'Surveys {", ".join([AL] + EXTRA)} not all found in Account %', c.account_id; END IF;""" if EXTRA else "")
+SR_C = 'sr."surveyId" = ANY(c.survey_ids)' if EXTRA else 'sr."surveyId" = c.survey_id'
+SR_CFG = 'sr."surveyId" IN (SELECT unnest(survey_ids) FROM cfg)' if EXTRA else 'sr."surveyId" = (SELECT survey_id FROM cfg)'
+AL_IN = f'IN ({ALL_AL})' if EXTRA else f'= {q(AL)}'
 META = "hstore(ARRAY['send_algo', 'legacy_import', 'status_source', s.status_source])" if V2 else "hstore('send_algo', 'legacy_import')"
 
 # ------------------------------------------------------------------------------------------------ 01
@@ -178,14 +190,14 @@ INSERT INTO public.legacy_invite_map (account_id, legacy_sguid, visit_msg_id)
 SELECT c.account_id, coalesce(s.link_sguid, s.legacy_sguid), s.visit_msg_id
 FROM stg s CROSS JOIN cfg c
 WHERE s.row_kind = 'legacy_invite' AND NOT s.sguid_reused
-  AND NOT EXISTS (SELECT 1 FROM public.survey_response sr WHERE sr."surveyId" = c.survey_id AND sr.status = 'Deleted'
+  AND NOT EXISTS (SELECT 1 FROM public.survey_response sr WHERE {SR_C} AND sr.status = 'Deleted'
                   AND btrim(sr.sguid) = s.legacy_sguid);
 
 UPDATE public.survey_response sr SET sguid = sr.sguid             -- fires the trigger, which fills visit_msg_id
 FROM stg s, cfg c
-WHERE sr."surveyId" = c.survey_id AND sr.visit_msg_id IS NULL AND sr.sguid = s.link_sguid AND s.has_response;
+WHERE {SR_C} AND sr.visit_msg_id IS NULL AND sr.sguid = s.link_sguid AND s.has_response;
 
-""".replace("{CODE}", CODE) if LINK else (
+""".replace("{CODE}", CODE).replace("{SR_C}", SR_C) if LINK else (
     "-- 7) No linking (link_responses false, DEV-232 decision 2): no legacy_invite_map rows, Survey Responses untouched.\n"
     "--    Ops decide; linking later = config change, rebuild, rerun.\n\n")
 V2_STG = "" if not V2 else (",\n       NULLIF(btrim(status_source::text), '')                AS status_source,"
@@ -227,7 +239,7 @@ SELECT s."accountId" AS account_id, s.id AS survey_id,
        (SELECT coalesce(min(l.quarantine_days), 90) FROM public.location l WHERE l.account_id = s."accountId") AS quarantine_days,
        (SELECT a.sms_sender FROM public.account a WHERE a.id = s."accountId") AS sms_from,
        now() AS loaded_at,
-       {q(SRC)}::text AS source_file
+       {q(SRC)}::text AS source_file{CFG_SURVEYS}
 FROM public.survey s WHERE s."alchemerId"::text = {q(AL)};
 
 DO $$ DECLARE c record; n int; BEGIN
@@ -237,7 +249,7 @@ DO $$ DECLARE c record; n int; BEGIN
   IF c.n_locations <> {NLOC} THEN RAISE EXCEPTION 'Account % has % Locations, expected {NLOC}', c.account_id, c.n_locations; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.account WHERE id = c.account_id AND name = {q(C['account_name'])}) THEN
     RAISE EXCEPTION 'Account % is not {C['account_name']}', c.account_id; END IF;
-  IF c.sms_from IS NULL THEN RAISE EXCEPTION 'Account % has no sms_sender', c.account_id; END IF;
+  IF c.sms_from IS NULL THEN RAISE EXCEPTION 'Account % has no sms_sender', c.account_id; END IF;{CFG_SURVEY_CHECK}
   IF to_regclass('public.legacy_source_row') IS NULL OR to_regclass('public.legacy_invite_map') IS NULL THEN
     RAISE EXCEPTION 'Run 01_before_import.sql first'; END IF;
   IF EXISTS (SELECT 1 FROM public.legacy_source_row WHERE account_id = c.account_id AND source_file = c.source_file) THEN
@@ -296,7 +308,7 @@ DO $$ DECLARE n int; BEGIN
   SELECT count(*) INTO n FROM stg WHERE has_response AND (row_kind <> 'legacy_invite' OR link_sguid IS NULL OR sguid_reused);
     IF n > 0 THEN RAISE EXCEPTION 'responded rows that cannot be linked %', n; END IF;
   SELECT count(*) INTO n FROM stg s JOIN public.survey_response sr
-     ON sr."surveyId" = (SELECT survey_id FROM cfg) AND sr.sguid = s.link_sguid AND sr.visit_msg_id IS NULL
+     ON {SR_CFG} AND sr.sguid = s.link_sguid AND sr.visit_msg_id IS NULL
      WHERE s.has_response;
     IF n <> {ANS} THEN RAISE EXCEPTION 'unlinked legacy responses found %, expected {ANS} (staging older than prod?)', n; END IF;{V2_CHECKS}
 END $$;
@@ -490,7 +502,7 @@ SELECT (SELECT count(*) FROM r)                                                 
           AND p.created = (SELECT min(loaded_at) FROM b))                                AS new_patients,
        (SELECT count(*) FROM r WHERE row_kind IN ('legacy_invite','legacy_visit') AND patient_id IS NULL) AS legacy_rows_without_patient,
        (SELECT count(*) FROM survey_response sr JOIN survey s ON s.id = sr."surveyId"
-          WHERE s."alchemerId"::text = {q(AL)} AND sr.visit_msg_id IS NULL)              AS still_unlinked;
+          WHERE s."alchemerId"::text {AL_IN} AND sr.visit_msg_id IS NULL)              AS still_unlinked;
 
 -- 2) Message performance, legacy quarters (sent/delivered ESTIMATED, responses real)
 SELECT date_trunc('quarter', vm.sent_at AT TIME ZONE 'Europe/Zagreb')::date AS quarter,

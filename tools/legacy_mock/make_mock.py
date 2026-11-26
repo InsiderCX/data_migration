@@ -26,10 +26,21 @@ C = json.loads((ROOT / "sql_config.json").read_text())
 f = pd.read_csv(ROOT / "data" / C["load_file"], dtype=str, keep_default_na=False)
 ACC = C["account_id_prod"]
 TPL = {"videntis": [(79, "HR"), (80, "EN"), (81, "FR"), (82, "DE"), (83, "IT")], "arcadia": [(114, "HR")], "apolonija": [(84, "HR")],
-       "kvaternik": [(40, "HR", 2), (39, "HR", 1)], "mazalin": [(44, "HR", None)], "opticalexpress": [(112, "HR"), (113, "SL")]}[C["slug"]]
+       "kvaternik": [(40, "HR", 2), (39, "HR", 1)], "mazalin": [(44, "HR", None)], "opticalexpress": [(112, "HR"), (113, "SL")],
+       # DEV-375
+       "bolnicacolic": [(370, "SR")], "ortonova": [(255, "HR"), (258, "IT"), (261, "SL")],
+       "affidea": [(138, "HR", 1), (132, "HR", 2), (126, "HR", 3), (120, "HR", 4), (54, "AA", 1), (51, "AA", 4)]}[C["slug"]]
 TPL = [t + (1,) if len(t) == 2 else t for t in TPL]          # (id, language, mock Location id or None)
 # Locations as on EU prod (names matter: layout-2 loads resolve a row's Location by name)
-LOCS = {"kvaternik": ["Kvaternik Subiceva", "Kvaternik Kostanjevec"]}.get(C["slug"], [C["account_name"]])
+LOCS = {"kvaternik": ["Kvaternik Subiceva", "Kvaternik Kostanjevec"],
+        "affidea": ["Čavka", "Kalajžić", "Sv. Rok", "Vita"]}.get(C["slug"], [C["account_name"]])
+# "extra_alchemer_ids" (Orto-Nova): more Surveys; each response goes to its own Survey as on prod (from the DB export)
+EXTRA = C.get("extra_alchemer_ids", [])
+SURVEY_OF = {}
+if EXTRA:
+    dbr = pd.read_csv(sorted((ROOT / "data").glob("db_unlinked_responses_*.csv"))[-1], dtype=str, keep_default_na=False)
+    mock_id = {a: i for i, a in enumerate([C["alchemer_id"]] + EXTRA, start=1)}
+    SURVEY_OF = {r.sguid: mock_id[r.alchemer_survey] for r in dbr.itertuples() if r.status != "Deleted"}
 COUNTRIES = (pathlib.Path(__file__).parent / "country_codes.txt").read_text().split()   # public.country on EU prod, 6 Nov 2026
 q = lambda xs: ",".join("'" + str(x).replace("'", "''") + "'" for x in xs)
 
@@ -128,7 +139,7 @@ INSERT INTO legacy_sending_batch(sending_batch_id, account_id, code, comment) VA
 SELECT setval('account_id_seq', {ACC - 1});
 INSERT INTO account(name, sms_sender) VALUES ('{C['account_name']}', 'Mock');
 INSERT INTO location(account_id, name) VALUES {", ".join(f"({ACC}, '{n}')" for n in LOCS)};
-INSERT INTO survey("accountId", "alchemerId") VALUES ({ACC}, '{C['alchemer_id']}');
+INSERT INTO survey("accountId", "alchemerId") VALUES {", ".join(f"({ACC}, '{a}')" for a in [C['alchemer_id']] + EXTRA)};
 INSERT INTO visit_msg_template(id, account_id, location_id, language_code, type, sms_text) VALUES
   {", ".join(f"({i},{ACC},{'NULL' if loc is None else loc},'{l}','SURVEY_INVITE','{l} tpl')" for i, l, loc in TPL)};
 INSERT INTO patient(account_id, source_id, phone) VALUES ({ACC}, 'PLATFORMPAT', '385');
@@ -137,10 +148,10 @@ INSERT INTO patient_visit(account_id, location_id, visit_date, patient_id)
 INSERT INTO visit_msg_sending_batch(account_id, trigger, processed_visits, processed_patients, created_messages,
   quarantine_blocked, ignored_visits) VALUES ({ACC}, 'cron', 1, 1, 1, 0, '[]');
 INSERT INTO visit_msg(id, account_id, sending_batch_id, patient_visit_id, sms_from, destination, sms_text, status, invite_id)
-  SELECT x::uuid, {ACC}, 2, 1 + row_number() OVER (), 'Mock', '385', 'x', 'DELIVERED', x::uuid FROM unnest(ARRAY[{q(plat)}]) x;
+  SELECT x::uuid, {ACC}, 2, 1 + row_number() OVER (), 'Mock', '385', 'x', 'DELIVERED', x::uuid FROM unnest(ARRAY[{q(plat)}]::text[]) x;
 INSERT INTO patient_ticket(patient_id, patient_visit_id) VALUES (1, 1);
 INSERT INTO survey_response("surveyId", sguid, status, "NPS_SCORE", "dateStarted")
-  SELECT 1, x, 'Complete', 9, '2024-01-01' FROM unnest(ARRAY[{q(resp)}]) x;
+  SELECT sv, x, 'Complete', 9, '2024-01-01' FROM unnest(ARRAY[{q(resp)}], ARRAY[{",".join(str(SURVEY_OF.get(x, 1)) for x in resp) or "1"}]::int[]) u(x, sv);
 INSERT INTO survey_response("surveyId", sguid, status, "NPS_SCORE", "dateStarted") VALUES (1, '{deleted_on}', 'Deleted', 3, '2024-01-01');
 INSERT INTO survey_response("surveyId", sguid, status, "NPS_SCORE", "dateStarted") SELECT 1, 'test' || g, 'Complete', 5, '2023-06-01' FROM generate_series(1, 5) g;
 {"INSERT INTO survey_response(" + '"surveyId", sguid, status, "NPS_SCORE", "dateStarted"' + f") VALUES (1, '{reused_resp[0]}', 'Complete', 10, '2024-01-01');" if reused_resp else ""}
@@ -151,5 +162,6 @@ INSERT INTO patient(account_id, source_id, phone, first_name) SELECT {ACC}, NULL
 UPDATE patient SET created = now() - interval '2 day', updated = now() - interval '1 day';
 """
 open(OUT_MOCK, "w").write(mock)
-print("mock: platform invites", len(plat), "| responses", len(resp), "| existing by source_id", len(existing_sid),
+print("mock: surveys", 1 + len(EXTRA), "| responses per mock survey", pd.Series([SURVEY_OF.get(x, 1) for x in resp]).value_counts().to_dict(),
+      "| platform invites", len(plat), "| responses", len(resp), "| existing by source_id", len(existing_sid),
       "| phones on 1 / 2 Patients", len(one_phone), "/", len(two_phone))
