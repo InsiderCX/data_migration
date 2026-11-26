@@ -78,6 +78,7 @@ Linear: Orto-Nova [DEV-406](https://linear.app/insidercx/issue/DEV-406) build �
 - Step 2: run log `accounts/ortonova/runs/2026-11-25_staging.md`.
 - Step 3: Affidea on staging, steps 0–6 (`STOP_AFTER=6`, rollback test skipped): batch **13113**, 7,628 linked, export identical, legacy NPS 81.4; staging scores match prod. Run log `accounts/affidea/runs/2026-11-26_staging.md`.
 - Step 4: DEV-412 updated with both runs. Next: Ana does DEV-412, then the ops validation goes to Karlo.
+- **Order to production (Ana, 26 Nov):** 1. manual validation DEV-412 (Ana) → 2. ops validation (COPS task, Karlo) and his answers → 3. the decisions in the `PRODUCTION.md` drafts (rollback, Affidea split characters) → 4. production.
 - Still open: the rollback on staging for Orto-Nova and Affidea (mock test only). Ana decides before production.
 
 ## Where we stopped (25 Nov 2026, ~15:45) — plan for 26 Nov
