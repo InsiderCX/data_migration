@@ -109,5 +109,5 @@ Branch `feat/DEV-375-legacy-import-next-three`, **PR #11** open (assigned to Ana
 - Lesson: a wait loop with `pgrep -f "<text>"` matches its own command line; wait on a PID instead.
 
 **Later**
-- `PRODUCTION.md` for each Account (DEV-378 / DEV-410 / DEV-411), including the rollback-time decision.
+- `PRODUCTION.md` for each Account (DEV-378 / DEV-410 / DEV-411): **drafted 26 Nov**. Open decisions in them: rollback (Orto-Nova, Affidea: indexes first or accept the risk) and Affidea's 7 split characters (import with `psql \copy`, or Beekeeper plus a `05` fix).
 - Karlo's answers may change the builds (rebuild + staging rerun).
