@@ -2,6 +2,7 @@
 # Run one Account's STAGING.md end to end on EU STAGING ONLY (refuses any other database). Writes to staging.
 # Usage from the repo root: bash tools/run_staging.sh <account> <clinic csv file name in accounts/<account>/data/>
 # Needs STG_DATABASE_URL in .env. Never point it at prod.
+# STOP_AFTER=6 bash tools/run_staging.sh ... stops after the export check (skips the rollback test and reload).
 set -uo pipefail
 REPO=/Users/anabelcar/Code/data_migration; A=$1; CLINIC=$2; ACC=$REPO/accounts/$A
 STG="$(grep '^STG_DATABASE_URL=' $REPO/.env | cut -d= -f2-)"
@@ -33,6 +34,7 @@ if os.path.exists(sys.argv[3]):  # reused_rule "pick": rows the builder left out
     b = b[~pd.Series(range(1, len(b) + 1), index=b.index).isin(gone)].reset_index(drop=True)
 print(f"export rows {len(a)} | original rows {len(b)} | identical values: {a.equals(b)}"); sys.exit(0 if a.equals(b) else 1)
 PY
+if [ "${STOP_AFTER:-}" = 6 ]; then echo; echo "STOP_AFTER=6: skipping rollback test and reload; $A stays loaded"; echo "DONE $A (steps 0-6)"; exit 0; fi
 step "7 99_rollback.sql"; P -A -F ' | ' -f $ACC/sql/99_rollback.sql 2>&1 | grep -v "^BEGIN\|^COMMIT\|^DELETE\|^UPDATE\|^SELECT\|^CREATE\|^DO$"; [ ${PIPESTATUS[0]} = 0 ] || fail 7
 step "8 reload: 01 + import + 02"
 P -f $ACC/sql/01_before_import.sql >/dev/null 2>&1 || fail "8.01"
