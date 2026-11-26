@@ -80,6 +80,8 @@ Linear: Orto-Nova [DEV-406](https://linear.app/insidercx/issue/DEV-406) build �
 - Step 4: DEV-412 updated with both runs. Next: Ana does DEV-412, then the ops validation goes to Karlo.
 - **Order to production (Ana, 26 Nov):** 1. manual validation DEV-412 (Ana) → 2. ops validation (COPS task, Karlo) and his answers → 3. the decisions in the `PRODUCTION.md` drafts (rollback, Affidea split characters) → 4. production.
 - Still open: the rollback on staging for Orto-Nova and Affidea (mock test only). Ana decides before production.
+- **DEV-412 done (Ana, 26 Nov).** Record: `docs/validation/2026-11-26_manual_validation_dev412.md`. Colić 720 = Zoho 720 (Feb 2023 – Apr 2026); Orto-Nova Oct 2023 88 = 88; Affidea Zoho = load on 356 of 357 days (11 Mar 2024: response 7379). Message performance can't be compared with Zoho (estimated send date). Kalajžić Apr 2024 +1 on staging: response 8060 reopened 4 Nov 2026 (staging-only).
+- **Ops validation: COPS-383** (Karlo; COPS-234 layout, A1–A13 decisions, B1–B6 acknowledge, C1 sign-off). DEV-377 / DEV-408 / DEV-409 point there and are In Progress; builds DEV-376 / DEV-406 / DEV-407 Done.
 
 ## Where we stopped (25 Nov 2026, ~15:45) — plan for 26 Nov
 
