@@ -68,11 +68,19 @@ Linear: Orto-Nova [DEV-406](https://linear.app/insidercx/issue/DEV-406) build �
 - Steps 0–4 done for all three Accounts: discovery, account cards, Colić conversion, load files, mock tests (ALL CHECKS PASSED). PR #11.
 - Ana (25 Nov): build without waiting for Karlo; his questions and the assumptions the build makes are in DEV-377, DEV-408, DEV-409, to confirm during validation.
 - Builder and SQL got opt-in options (one id sequence, every legacy row sent, age at the visit, `GROUP_NAME` status, send date from the own response, rate tolerance, more Surveys per Account). The six done Accounts rebuild byte-identical and still pass their mock tests.
-- Step 5, EU staging: Claude runs `tools/run_staging.sh` with Ana's permission for staging only (25 Nov, over her VPN). Colić done (batch 13111). Orto-Nova and Affidea running.
+- Step 5, EU staging: Claude runs `tools/run_staging.sh` with Ana's permission for staging only (25 Nov, over her VPN). Colić done (batch 13111). Orto-Nova loaded (batch 13112, rollback test did not finish). Affidea loaded 26 Nov (batch 13113, rollback test skipped with `STOP_AFTER=6`).
 - Found on staging: Orto-Nova's legacy scores on the staging copy differ from prod (about 620 score 5 on staging, mostly 10 on prod). Staging NPS for Orto-Nova is not meaningful; counts are.
 - Found on staging: `99_rollback` is slow because `legacy_source_row` (visit_msg_id, patient_visit_id, patient_id) and `legacy_invite_map` (visit_msg_id) have no index. Colić 14 min; Orto-Nova and Affidea hours. Matters for production (rollback plan).
 
-## Where we stopped (25 Nov 2026, ~15:45) — start here on 26 Nov
+## Progress on 26 Nov 2026
+
+- Step 1: Orto-Nova on staging checked (read-only). One batch, **13112**, so the rollback test did not finish; the load is intact and `03` query 1 matches 25 Nov.
+- Step 2: run log `accounts/ortonova/runs/2026-11-25_staging.md`.
+- Step 3: Affidea on staging, steps 0–6 (`STOP_AFTER=6`, rollback test skipped): batch **13113**, 7,628 linked, export identical, legacy NPS 81.4; staging scores match prod. Run log `accounts/affidea/runs/2026-11-26_staging.md`.
+- Step 4: DEV-412 updated with both runs. Next: Ana does DEV-412, then the ops validation goes to Karlo.
+- Still open: the rollback on staging for Orto-Nova and Affidea (mock test only). Ana decides before production.
+
+## Where we stopped (25 Nov 2026, ~15:45) — plan for 26 Nov
 
 Branch `feat/DEV-375-legacy-import-next-three`, **PR #11** open (assigned to Ana). Everything below is committed there.
 
